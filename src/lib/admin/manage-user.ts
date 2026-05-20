@@ -6,8 +6,34 @@ import {
 } from "@/lib/auth/username";
 import type { UserRole } from "@/types/database";
 
-const PROFILE_SELECT =
-  "id, name, email, role, username, is_active, created_by, created_at";
+const PROFILE_SELECT_BASE =
+  "id, name, email, role, username, is_active, created_at";
+const PROFILE_SELECT_WITH_CREATED_BY = `${PROFILE_SELECT_BASE}, created_by`;
+
+const MIGRATION_HINT =
+  " Supabase SQL Editor에서 supabase/FIX_CREATED_BY_AND_SIGNUP.sql 을 실행해 주세요.";
+
+function isMissingColumnError(
+  message: string | undefined,
+  column: string
+): boolean {
+  const m = message ?? "";
+  return (
+    m.includes(column) &&
+    (m.includes("schema cache") || m.includes("Could not find"))
+  );
+}
+
+async function selectProfileAfterWrite(
+  admin: SupabaseClient,
+  userId: string,
+  usedCreatedBy: boolean
+) {
+  const selectCols = usedCreatedBy
+    ? PROFILE_SELECT_WITH_CREATED_BY
+    : PROFILE_SELECT_BASE;
+  return admin.from("profiles").select(selectCols).eq("id", userId);
+}
 
 const ROLE_LABEL: Record<"student" | "teacher", string> = {
   student: "학생",
@@ -52,40 +78,55 @@ async function syncProfileAfterAuthCreate(
     createdBy: string | null;
   }
 ): Promise<Result<Record<string, unknown>>> {
-  const fullPayload = {
+  const basePayload = {
     name: payload.name,
     email: payload.email,
     role: payload.role,
     username: payload.username,
     is_active: true,
-    created_by: payload.createdBy,
   };
 
-  const tryUpdate = async (body: typeof fullPayload) => {
-    return admin
+  let useCreatedBy =
+    payload.createdBy != null && payload.role === "student";
+  let writePayload: Record<string, unknown> = useCreatedBy
+    ? { ...basePayload, created_by: payload.createdBy }
+    : { ...basePayload };
+
+  const tryUpdate = async (body: Record<string, unknown>, withCreatedBy: boolean) => {
+    const { error } = await admin
       .from("profiles")
       .update(body)
-      .eq("id", userId)
-      .select(PROFILE_SELECT);
+      .eq("id", userId);
+    if (error) return { rows: null as null, error, withCreatedBy };
+    const read = await selectProfileAfterWrite(admin, userId, withCreatedBy);
+    return { rows: read.data, error: read.error, withCreatedBy };
   };
 
-  let { data: rows, error: updateError } = await tryUpdate(fullPayload);
+  let { rows, error: updateError, withCreatedBy } = await tryUpdate(
+    writePayload,
+    useCreatedBy
+  );
 
   if (
     updateError &&
-    (updateError.message.includes("created_by") ||
+    useCreatedBy &&
+    (isMissingColumnError(updateError.message, "created_by") ||
       updateError.message.includes("foreign key"))
   ) {
-    const retry = await tryUpdate({ ...fullPayload, created_by: null });
-    rows = retry.data;
+    useCreatedBy = false;
+    writePayload = { ...basePayload };
+    const retry = await tryUpdate(writePayload, false);
+    rows = retry.rows;
     updateError = retry.error;
+    withCreatedBy = false;
   }
 
   if (updateError) {
     const hint =
       updateError.message.includes("username") ||
-      updateError.message.includes("is_active")
-        ? " Supabase에서 마이그레이션 004_student_username.sql 을 실행해 주세요."
+      updateError.message.includes("is_active") ||
+      isMissingColumnError(updateError.message, "created_by")
+        ? MIGRATION_HINT
         : "";
     return {
       ok: false,
@@ -97,11 +138,31 @@ async function syncProfileAfterAuthCreate(
   let profile = rows?.[0] ?? null;
 
   if (!profile) {
-    const { data: inserted, error: insertError } = await admin
-      .from("profiles")
-      .insert({ id: userId, ...fullPayload })
-      .select(PROFILE_SELECT)
-      .single();
+    const tryInsert = async (body: Record<string, unknown>, withCreatedBy: boolean) => {
+      const selectCols = withCreatedBy
+        ? PROFILE_SELECT_WITH_CREATED_BY
+        : PROFILE_SELECT_BASE;
+      return admin
+        .from("profiles")
+        .insert({ id: userId, ...body })
+        .select(selectCols)
+        .single();
+    };
+
+    let { data: inserted, error: insertError } = await tryInsert(
+      writePayload,
+      withCreatedBy
+    );
+
+    if (
+      insertError &&
+      withCreatedBy &&
+      isMissingColumnError(insertError.message, "created_by")
+    ) {
+      const retry = await tryInsert({ ...basePayload }, false);
+      inserted = retry.data;
+      insertError = retry.error;
+    }
 
     if (insertError) {
       if (
@@ -117,8 +178,8 @@ async function syncProfileAfterAuthCreate(
       const hint =
         insertError.message.includes("username") ||
         insertError.message.includes("is_active") ||
-        insertError.message.includes("created_by")
-          ? " Supabase SQL Editor에서 004~005, 010 마이그레이션을 실행해 주세요."
+        isMissingColumnError(insertError.message, "created_by")
+          ? MIGRATION_HINT
           : "";
       return {
         ok: false,
@@ -142,7 +203,7 @@ async function syncProfileAfterAuthCreate(
       .from("profiles")
       .update({ role: payload.role })
       .eq("id", userId)
-      .select(PROFILE_SELECT)
+      .select(PROFILE_SELECT_BASE)
       .single();
 
     if (roleFixError) {
@@ -299,7 +360,7 @@ export async function updateManagedAccount(
 
   let fetchQuery = admin
     .from("profiles")
-    .select("id, name, email, role, username, is_active, created_by")
+    .select(PROFILE_SELECT_BASE)
     .eq("id", id)
     .eq("role", role);
 
@@ -307,7 +368,22 @@ export async function updateManagedAccount(
     fetchQuery = fetchQuery.eq("created_by", input.restrictToCreatorId);
   }
 
-  const { data: current, error: fetchError } = await fetchQuery.single();
+  let { data: current, error: fetchError } = await fetchQuery.single();
+
+  if (
+    fetchError &&
+    input.restrictToCreatorId &&
+    isMissingColumnError(fetchError.message, "created_by")
+  ) {
+    const fallback = await admin
+      .from("profiles")
+      .select(PROFILE_SELECT_BASE)
+      .eq("id", id)
+      .eq("role", role)
+      .single();
+    current = fallback.data;
+    fetchError = fallback.error;
+  }
 
   if (fetchError || !current) {
     return {
@@ -385,15 +461,29 @@ export async function updateManagedAccount(
     };
   }
 
-  const { data: profile, error: updateError } = await admin
+  let { data: profile, error: updateError } = await admin
     .from("profiles")
     .update(updates)
     .eq("id", id)
-    .select(PROFILE_SELECT)
+    .select(PROFILE_SELECT_WITH_CREATED_BY)
     .single();
 
+  if (updateError && isMissingColumnError(updateError.message, "created_by")) {
+    const fallback = await admin
+      .from("profiles")
+      .update(updates)
+      .eq("id", id)
+      .select(PROFILE_SELECT_BASE)
+      .single();
+    profile = fallback.data;
+    updateError = fallback.error;
+  }
+
   if (updateError) {
-    return { ok: false, message: updateError.message, status: 500 };
+    const hint = isMissingColumnError(updateError.message, "created_by")
+      ? MIGRATION_HINT
+      : "";
+    return { ok: false, message: updateError.message + hint, status: 500 };
   }
 
   const message =
@@ -429,7 +519,7 @@ export async function resetManagedAccountPassword(
 
   let accountQuery = admin
     .from("profiles")
-    .select("id, role, created_by")
+    .select("id, role")
     .eq("id", id)
     .eq("role", role);
 
@@ -437,7 +527,22 @@ export async function resetManagedAccountPassword(
     accountQuery = accountQuery.eq("created_by", options.restrictToCreatorId);
   }
 
-  const { data: account } = await accountQuery.single();
+  let { data: account, error: accountError } = await accountQuery.single();
+
+  if (
+    accountError &&
+    options?.restrictToCreatorId &&
+    isMissingColumnError(accountError.message, "created_by")
+  ) {
+    const fallback = await admin
+      .from("profiles")
+      .select("id, role")
+      .eq("id", id)
+      .eq("role", role)
+      .single();
+    account = fallback.data;
+    accountError = fallback.error;
+  }
 
   if (!account) {
     return {
