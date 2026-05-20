@@ -167,4 +167,4 @@ export const VIDEO_LINK_PLACEHOLDER =
   "https://www.youtube.com/watch?v=... 또는 https://vimeo.com/123456789";
 
 export const VIDEO_LINK_HELP =
-  "YouTube·Vimeo 공유 링크를 붙여 넣어 주세요. YouTube는 「공개」가 가장 안정적입니다. 「일부 공개」는 LMS에 안 뜰 수 있어, 그때는 YouTube에서 직접 시청하거나 영상을 공개로 바꿔 주세요.";
+  "YouTube 또는 Vimeo에 업로드한 영상의 공유 링크를 붙여 넣어 주세요.";

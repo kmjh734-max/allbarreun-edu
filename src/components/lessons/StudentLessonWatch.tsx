@@ -6,7 +6,6 @@ import { buildVimeoEmbedUrl } from "@/lib/video/parse-url";
 import { loadYouTubeIframeApi } from "@/lib/video/load-youtube-api";
 import {
   isYouTubeEmbedBlockedError,
-  youtubeEmbedFallbackUrl,
   youtubeWatchUrl,
 } from "@/lib/video/youtube-embed-fallback";
 import { resolveLessonVideo } from "@/lib/video/lesson-fields";
@@ -92,8 +91,6 @@ export function StudentLessonWatch({
 
   const [iframeEl, setIframeEl] = useState<HTMLIFrameElement | null>(null);
   const [ytContainerEl, setYtContainerEl] = useState<HTMLDivElement | null>(null);
-  /** 일부 공개·임베드 제한 영상: iframe 직접 재생이 API보다 안정적 */
-  const [ytUsePlainIframe, setYtUsePlainIframe] = useState(true);
   const [ytEmbedBlocked, setYtEmbedBlocked] = useState(false);
   const playerRef = useRef<PlayerHandle | null>(null);
   const completionSentRef = useRef(initialIsCompleted);
@@ -120,9 +117,9 @@ export function StudentLessonWatch({
   const [playerReady, setPlayerReady] = useState(false);
 
   useEffect(() => {
-    setYtUsePlainIframe(true);
     setYtEmbedBlocked(false);
     setPlayerReady(false);
+    setSaveError(null);
   }, [lessonId, resolved?.videoId, resolved?.provider]);
 
   const persistProgress = useCallback(
@@ -420,31 +417,13 @@ export function StudentLessonWatch({
     }
 
     if (resolved.provider !== "youtube") return;
-    if (!ytUsePlainIframe && !ytContainerEl) return;
+    if (!ytContainerEl) return;
 
     const youtubeVideoId = resolved.videoId;
     let ytPlayer: YT.Player | null = null;
     let pollId = 0;
     let lastYtSeconds = 0;
     let pendingResumeSeek = maxWatchedSecondsRef.current > 0;
-    let apiReady = false;
-
-    if (ytUsePlainIframe) {
-      setPlayerReady(true);
-      return () => {
-        disposed = true;
-      };
-    }
-
-    const apiFallbackTimer = window.setTimeout(() => {
-      if (!disposed && !apiReady) {
-        setYtUsePlainIframe(true);
-        setPlayerReady(true);
-        setSaveError(
-          "플레이어 API 연결이 지연되어 일반 재생 모드로 전환했습니다. 진도는 제한적으로 저장됩니다."
-        );
-      }
-    }, 12000);
 
     async function attachYouTube() {
       if (disposed) return;
@@ -468,21 +447,19 @@ export function StudentLessonWatch({
           events: {
             onReady: (event) => {
               if (disposed) return;
-              apiReady = true;
-              window.clearTimeout(apiFallbackTimer);
               playerRef.current = { kind: "youtube", player: event.target };
               setPlayerReady(true);
             },
             onError: (event) => {
               if (disposed) return;
-              window.clearTimeout(apiFallbackTimer);
               if (isYouTubeEmbedBlockedError(event.data)) {
                 setYtEmbedBlocked(true);
                 setPlayerReady(true);
                 return;
               }
-              setYtUsePlainIframe(true);
-              setPlayerReady(true);
+              setSaveError(
+                "영상을 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요."
+              );
             },
             onStateChange: (event) => {
               if (disposed || completionSentRef.current) return;
@@ -538,9 +515,14 @@ export function StudentLessonWatch({
                 return;
               }
 
-              if (event.data === YT.PlayerState.PLAYING) {
+              if (
+                event.data === YT.PlayerState.PLAYING ||
+                event.data === YT.PlayerState.PAUSED
+              ) {
                 const seconds = event.target.getCurrentTime();
+                const forceSave = event.data === YT.PlayerState.PAUSED;
                 if (
+                  event.data === YT.PlayerState.PLAYING &&
                   isForwardSeekBeyondMax(
                     seconds,
                     maxWatchedSecondsRef.current
@@ -556,18 +538,19 @@ export function StudentLessonWatch({
                   return;
                 }
                 lastYtSeconds = seconds;
-                void syncFromPlayheadRef.current(seconds, duration, false);
+                void syncFromPlayheadRef.current(
+                  seconds,
+                  duration,
+                  forceSave
+                );
               }
             },
           },
         });
       } catch (err) {
         console.error("[StudentLessonWatch] YouTube init failed:", err);
-        window.clearTimeout(apiFallbackTimer);
-        setYtUsePlainIframe(true);
-        setPlayerReady(true);
         setSaveError(
-          "일반 재생 모드로 전환했습니다. 끝까지 시청해 주세요."
+          "영상 플레이어 연결에 실패했습니다. 새로고침 후 다시 시도해 주세요."
         );
       }
     }
@@ -589,7 +572,6 @@ export function StudentLessonWatch({
 
     return () => {
       disposed = true;
-      window.clearTimeout(apiFallbackTimer);
       window.clearInterval(pollId);
       setPlayerReady(false);
       try {
@@ -603,7 +585,6 @@ export function StudentLessonWatch({
     resolved,
     iframeEl,
     ytContainerEl,
-    ytUsePlainIframe,
     resumeSeconds,
     getPlaybackState,
   ]);
@@ -659,10 +640,6 @@ export function StudentLessonWatch({
 
   const isVimeo = resolved.provider === "vimeo";
   const vimeoEmbedUrl = buildVimeoEmbedUrl(resolved.videoId, resumeSeconds);
-  const youtubeEmbedUrl = youtubeEmbedFallbackUrl(
-    resolved.videoId,
-    resumeSeconds
-  );
 
   return (
     <div className="space-y-6">
@@ -699,15 +676,6 @@ export function StudentLessonWatch({
                 YouTube에서 열기
               </a>
             </div>
-          ) : ytUsePlainIframe ? (
-            <iframe
-              src={youtubeEmbedUrl}
-              title={title}
-              className="absolute inset-0 h-full w-full border-0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-              onLoad={() => setPlayerReady(true)}
-            />
           ) : (
             <div
               ref={setYtContainerEl}
@@ -718,31 +686,9 @@ export function StudentLessonWatch({
         </div>
       </div>
 
-      {!isVimeo && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-          <p>
-            YouTube 「일부 공개」 영상은 학습 화면에 재생되지 않을 수 있습니다.
-            (업로더가 퍼가기를 막았거나 YouTube 정책 때문)
-          </p>
-          <p className="mt-2">
-            <strong>해결:</strong> 영상을 「공개」로 바꾸거나, 아래 링크로 YouTube에서
-            시청해 주세요.
-          </p>
-          <a
-            href={youtubeUrl?.trim() || youtubeWatchUrl(resolved.videoId)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 inline-flex rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
-          >
-            YouTube에서 이 영상 보기
-          </a>
-        </div>
-      )}
-
-      {!playerReady && (
+      {!playerReady && !ytEmbedBlocked && (
         <p className="text-xs text-slate-500">
-          영상을 불러오는 중입니다. 재생이 되지 않으면 위 「YouTube에서 이 영상 보기」를
-          이용해 주세요.
+          영상을 불러오는 중입니다. 재생이 되지 않으면 새로고침해 주세요.
         </p>
       )}
 
