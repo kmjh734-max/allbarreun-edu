@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { CreateClassForm } from "@/components/classes/CreateClassForm";
+import { DeleteClassButton } from "@/components/classes/DeleteClassButton";
 import { ActiveBadge } from "@/components/ui/Badge";
 import { PageHeader } from "@/components/ui/PageHeader";
 import type { Class, Profile } from "@/types/database";
@@ -97,12 +98,19 @@ export default async function AdminClassesPage() {
                     <ActiveBadge active={cls.is_active} />
                   </td>
                   <td className="px-4 py-3">
-                    <Link
-                      href={`/admin/classes/${cls.id}`}
-                      className="font-medium text-brand-600 hover:underline"
-                    >
-                      반 관리
-                    </Link>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        href={`/admin/classes/${cls.id}`}
+                        className="font-medium text-brand-600 hover:underline"
+                      >
+                        반 관리
+                      </Link>
+                      <DeleteClassButton
+                        classId={cls.id}
+                        className={cls.name}
+                        compact
+                      />
+                    </div>
                   </td>
                 </tr>
               ))

@@ -155,10 +155,14 @@ export function AccountManagement({
       courseInfo && courseInfo.count > 0
         ? `\n담당 강좌 ${courseInfo.count}개는 강사 미배정 상태가 됩니다.`
         : "";
+    const studentNote =
+      roleLabel === "학생"
+        ? "\n학생 계정과 수강·학습 기록이 함께 삭제됩니다."
+        : "";
 
     if (
       !window.confirm(
-        `「${user.name}」 ${roleLabel} 계정을 완전히 삭제할까요?\n삭제 후에는 되돌릴 수 없습니다.${courseNote}`
+        `「${user.name}」 ${roleLabel} 계정을 완전히 삭제할까요?\n삭제 후에는 되돌릴 수 없습니다.${courseNote}${studentNote}`
       )
     ) {
       return;

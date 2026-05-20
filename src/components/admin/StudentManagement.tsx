@@ -14,6 +14,7 @@ export function StudentManagement({ students }: StudentManagementProps) {
       apiBasePath="/api/admin/students"
       users={students}
       allowUsernameEdit
+      allowDelete={true}
     />
   );
 }

@@ -9,6 +9,7 @@ import {
   adminRemoveStudentFromClass,
   updateClass,
 } from "@/app/admin/classes/actions";
+import { DeleteClassButton } from "@/components/classes/DeleteClassButton";
 import {
   teacherAddStudentToClass,
   teacherAssignCourseToClass,
@@ -143,13 +144,16 @@ export function ClassInfoPanel({
           {message.text}
         </p>
       )}
-      <button
-        type="submit"
-        disabled={loading}
-        className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
-      >
-        {loading ? "저장 중..." : "반 정보 저장"}
-      </button>
+      <div className="flex flex-wrap items-center gap-3 pt-2">
+        <button
+          type="submit"
+          disabled={loading}
+          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+        >
+          {loading ? "저장 중..." : "반 정보 저장"}
+        </button>
+        <DeleteClassButton classId={classId} className={initialName} />
+      </div>
     </form>
   );
 }
@@ -285,9 +289,9 @@ export function ClassStudentsPanel({
                 type="button"
                 disabled={loading}
                 onClick={() => handleRemove(m.student_id, m.name)}
-                className="text-red-600 hover:underline disabled:opacity-50"
+                className="rounded-lg border border-red-300 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
               >
-                제거
+                삭제
               </button>
             </li>
           ))

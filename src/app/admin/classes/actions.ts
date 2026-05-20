@@ -103,6 +103,35 @@ export async function updateClass(
   return { ok: true, message: "반 정보가 저장되었습니다." };
 }
 
+export async function deleteClass(classId: string): Promise<ClassActionResult> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return { ok: false, message: auth.message };
+
+  const supabase = await createClient();
+
+  const { data: existing } = await supabase
+    .from("classes")
+    .select("id, name")
+    .eq("id", classId)
+    .maybeSingle();
+
+  if (!existing) {
+    return { ok: false, message: "반을 찾을 수 없습니다." };
+  }
+
+  const { error } = await supabase.from("classes").delete().eq("id", classId);
+
+  if (error) {
+    return { ok: false, message: error.message };
+  }
+
+  revalidateClassPaths();
+  return {
+    ok: true,
+    message: `「${existing.name}」 반이 삭제되었습니다.`,
+  };
+}
+
 export async function adminAddStudentToClass(
   classId: string,
   studentId: string
