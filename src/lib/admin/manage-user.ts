@@ -564,3 +564,68 @@ export async function resetManagedAccountPassword(
     profile: null,
   };
 }
+
+export async function deleteManagedAccount(
+  admin: SupabaseClient,
+  id: string,
+  role: ManagedAccountRole,
+  options?: ResetPasswordOptions
+): Promise<Result<null>> {
+  const label = ROLE_LABEL[role];
+
+  let accountQuery = admin
+    .from("profiles")
+    .select("id, role, name")
+    .eq("id", id)
+    .eq("role", role);
+
+  if (options?.restrictToCreatorId) {
+    accountQuery = accountQuery.eq("created_by", options.restrictToCreatorId);
+  }
+
+  let { data: account, error: accountError } = await accountQuery.single();
+
+  if (
+    accountError &&
+    options?.restrictToCreatorId &&
+    isMissingColumnError(accountError.message, "created_by")
+  ) {
+    const fallback = await admin
+      .from("profiles")
+      .select("id, role, name")
+      .eq("id", id)
+      .eq("role", role)
+      .single();
+    account = fallback.data;
+    accountError = fallback.error;
+  }
+
+  if (accountError || !account) {
+    return {
+      ok: false,
+      message: `${label}을(를) 찾을 수 없습니다.`,
+      status: 404,
+    };
+  }
+
+  const { error: deleteError } = await admin.auth.admin.deleteUser(id);
+
+  if (deleteError) {
+    const msg = deleteError.message.toLowerCase();
+    if (msg.includes("not found") || msg.includes("user not found")) {
+      await admin.from("profiles").delete().eq("id", id).eq("role", role);
+      return {
+        ok: true,
+        message: `${label} 계정이 삭제되었습니다.`,
+        profile: null,
+      };
+    }
+    return { ok: false, message: deleteError.message, status: 400 };
+  }
+
+  return {
+    ok: true,
+    message: `${label} 계정이 삭제되었습니다.`,
+    profile: null,
+  };
+}

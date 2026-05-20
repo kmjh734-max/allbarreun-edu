@@ -21,6 +21,7 @@ export function TeacherManagement({
       apiBasePath="/api/admin/teachers"
       users={teachers}
       allowUsernameEdit={false}
+      allowDelete
       courseInfoByUserId={courseInfoByUserId}
     />
   );

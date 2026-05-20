@@ -16,6 +16,8 @@ interface AccountManagementProps {
   apiBasePath: string;
   users: Profile[];
   allowUsernameEdit: boolean;
+  /** 강사 등: 계정 완전 삭제 (관리자 전용 API DELETE) */
+  allowDelete?: boolean;
   courseInfoByUserId?: Record<string, TeacherCourseInfo>;
 }
 
@@ -26,6 +28,7 @@ export function AccountManagement({
   apiBasePath,
   users: initialUsers,
   allowUsernameEdit,
+  allowDelete = false,
   courseInfoByUserId,
 }: AccountManagementProps) {
   const router = useRouter();
@@ -141,6 +144,57 @@ export function AccountManagement({
     } catch (fetchError) {
       console.error("handleSaveEdit error:", fetchError);
       setMessage({ type: "error", text: "저장 중 오류가 발생했습니다." });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDelete(user: Profile) {
+    const courseInfo = courseInfoByUserId?.[user.id];
+    const courseNote =
+      courseInfo && courseInfo.count > 0
+        ? `\n담당 강좌 ${courseInfo.count}개는 강사 미배정 상태가 됩니다.`
+        : "";
+
+    if (
+      !window.confirm(
+        `「${user.name}」 ${roleLabel} 계정을 완전히 삭제할까요?\n삭제 후에는 되돌릴 수 없습니다.${courseNote}`
+      )
+    ) {
+      return;
+    }
+
+    setLoading(true);
+    setMessage(null);
+
+    try {
+      const res = await fetch(`${apiBasePath}/${user.id}`, {
+        method: "DELETE",
+      });
+
+      const data = await parseAdminApiResponse(res);
+
+      if (!res.ok || !data.ok) {
+        setMessage({
+          type: "error",
+          text: data.message ?? "삭제에 실패했습니다.",
+        });
+        return;
+      }
+
+      setMessage({
+        type: "success",
+        text: data.message ?? `${roleLabel} 계정이 삭제되었습니다.`,
+      });
+      if (editingId === user.id) cancelEdit();
+      if (resetId === user.id) {
+        setResetId(null);
+        setResetPassword("");
+      }
+      router.refresh();
+    } catch (fetchError) {
+      console.error("handleDelete error:", fetchError);
+      setMessage({ type: "error", text: "삭제 중 오류가 발생했습니다." });
     } finally {
       setLoading(false);
     }
@@ -455,6 +509,16 @@ export function AccountManagement({
                             >
                               {user.is_active ? "비활성화" : "활성화"}
                             </button>
+                            {allowDelete && (
+                              <button
+                                type="button"
+                                disabled={loading}
+                                onClick={() => handleDelete(user)}
+                                className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                              >
+                                삭제
+                              </button>
+                            )}
                           </>
                         )}
                       </div>
