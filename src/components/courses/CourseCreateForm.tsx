@@ -31,7 +31,7 @@ export function CourseCreateForm({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [teacherId, setTeacherId] = useState("");
-  const [isPublished, setIsPublished] = useState(false);
+  const [isPublished, setIsPublished] = useState(true);
   const [videoRows, setVideoRows] = useState<VideoDraftRow[]>([
     createEmptyVideoRow(),
   ]);
@@ -104,7 +104,7 @@ export function CourseCreateForm({
               ...videoPayload,
               material_url: null,
               order_index: orderIndex,
-              is_published: isPublished,
+              is_published: true,
             });
             return { error };
           }

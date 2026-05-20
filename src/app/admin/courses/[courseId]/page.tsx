@@ -5,6 +5,7 @@ import { getCurrentProfile } from "@/lib/auth/get-profile";
 import { resolveLessonTeacherId } from "@/lib/courses/resolve-lesson-teacher-id";
 import { flattenCourseLessons } from "@/lib/courses/course-lessons";
 import { CourseSettingsForm } from "@/components/courses/CourseSettingsForm";
+import { CourseStudentVisibilityBanner } from "@/components/courses/CourseStudentVisibilityBanner";
 import { CourseVideoManager } from "@/components/courses/CourseVideoManager";
 import type { Course, Lesson, Profile, Section } from "@/types/database";
 
@@ -120,11 +121,20 @@ export default async function AdminCourseDetailPage({ params }: PageProps) {
         />
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <CourseStudentVisibilityBanner
+          courseId={courseId}
+          courseTitle={typedCourse.title}
+          courseIsPublished={typedCourse.is_published}
+          publishedLessonCount={
+            lessonList.filter((l) => l.is_published).length
+          }
+          totalLessonCount={lessonList.length}
+          enrollmentCount={(enrollments ?? []).length}
+        />
         <CourseVideoManager
           courseId={courseId}
           teacherId={lessonTeacherId}
-          courseIsPublished={typedCourse.is_published}
           lessons={flatLessons}
         />
       </section>

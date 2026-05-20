@@ -21,7 +21,6 @@ import type { Lesson } from "@/types/database";
 interface CourseVideoManagerProps {
   courseId: string;
   teacherId: string;
-  courseIsPublished: boolean;
   lessons: Lesson[];
 }
 
@@ -30,7 +29,6 @@ type Message = { type: "success" | "error"; text: string } | null;
 export function CourseVideoManager({
   courseId,
   teacherId,
-  courseIsPublished,
   lessons: initialLessons,
 }: CourseVideoManagerProps) {
   const router = useRouter();
@@ -171,7 +169,7 @@ export function CourseVideoManager({
                 ...videoPayload,
                 material_url: null,
                 order_index: orderIndex,
-                is_published: courseIsPublished,
+                is_published: true,
               })
               .select("*")
               .single();

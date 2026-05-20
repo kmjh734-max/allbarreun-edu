@@ -82,7 +82,12 @@ export default async function StudentCoursePage({ params }: PageProps) {
 
       <ul className="space-y-2">
         {flatLessons.length === 0 ? (
-          <li className="text-sm text-slate-500">등록된 영상이 없습니다.</li>
+          <li className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-600">
+            <p>공개된 강의 영상이 없습니다.</p>
+            <p className="mt-1 text-slate-500">
+              관리자에게 영상 「학생에게 공개」 여부와 수강 배정을 확인해 주세요.
+            </p>
+          </li>
         ) : (
           flatLessons.map((lesson, index) => {
             const done = progressMap.get(lesson.id);

@@ -5,6 +5,7 @@ import { getCurrentProfile } from "@/lib/auth/get-profile";
 import { resolveLessonTeacherId } from "@/lib/courses/resolve-lesson-teacher-id";
 import { flattenCourseLessons } from "@/lib/courses/course-lessons";
 import { CourseSettingsForm } from "@/components/courses/CourseSettingsForm";
+import { CourseStudentVisibilityBanner } from "@/components/courses/CourseStudentVisibilityBanner";
 import { CourseVideoManager } from "@/components/courses/CourseVideoManager";
 import { unwrapRelation } from "@/lib/progress/enrollment-progress";
 import type { Course, Lesson, Section } from "@/types/database";
@@ -86,15 +87,24 @@ export default async function TeacherCoursePage({ params }: PageProps) {
         />
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h3 className="mb-4 font-semibold text-slate-900">영상 관리</h3>
+      <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 className="font-semibold text-slate-900">영상 관리</h3>
+        <CourseStudentVisibilityBanner
+          courseId={courseId}
+          courseTitle={typedCourse.title}
+          courseIsPublished={typedCourse.is_published}
+          publishedLessonCount={
+            lessonList.filter((l) => l.is_published).length
+          }
+          totalLessonCount={lessonList.length}
+          enrollmentCount={(enrollments ?? []).length}
+        />
         <CourseVideoManager
           courseId={courseId}
           teacherId={resolveLessonTeacherId(
             typedCourse.teacher_id,
             profile!.id
           )}
-          courseIsPublished={typedCourse.is_published}
           lessons={flatLessons}
         />
       </section>
