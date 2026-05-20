@@ -56,6 +56,22 @@ export function lessonVideoFieldsFromUrl(
 export function resolveLessonVideo(
   lesson: LessonVideoDbRow
 ): LessonVideoSource | null {
+  const candidateUrls = [
+    lesson.youtube_url,
+    lesson.vimeo_url,
+  ].filter((u): u is string => Boolean(u?.trim()));
+
+  for (const url of candidateUrls) {
+    const parsed = parseVideoLink(url);
+    if (parsed) {
+      return {
+        provider: parsed.provider,
+        videoId: parsed.videoId,
+        url,
+      };
+    }
+  }
+
   const provider: VideoProvider =
     lesson.video_provider === "youtube" || lesson.youtube_video_id
       ? "youtube"

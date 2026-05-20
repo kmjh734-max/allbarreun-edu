@@ -22,7 +22,7 @@ export default async function AdminCourseDetailPage({ params }: PageProps) {
     { data: course },
     { data: teachers },
     { data: sections },
-    { data: lessons },
+    { data: lessons, error: lessonsError },
     { data: enrollments },
   ] = await Promise.all([
     supabase.from("courses").select("*").eq("id", courseId).single(),
@@ -132,10 +132,16 @@ export default async function AdminCourseDetailPage({ params }: PageProps) {
           totalLessonCount={lessonList.length}
           enrollmentCount={(enrollments ?? []).length}
         />
+        {lessonsError && (
+          <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            영상 목록을 불러오지 못했습니다: {lessonsError.message}
+          </p>
+        )}
         <CourseVideoManager
           courseId={courseId}
           teacherId={lessonTeacherId}
           lessons={flatLessons}
+          apiVariant="admin"
         />
       </section>
 

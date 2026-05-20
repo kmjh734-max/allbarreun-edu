@@ -2,11 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import {
   createEmptyVideoRow,
-  ensureDefaultSection,
-  getNextLessonOrderIndex,
   validateVideoDraftRows,
   type VideoDraftRow,
 } from "@/lib/courses/course-lessons";
@@ -14,7 +11,6 @@ import {
   lessonDisplayVideoUrl,
   lessonProviderLabel,
 } from "@/lib/video/lesson-fields";
-import { withLessonVideoPayload } from "@/lib/video/lesson-persist";
 import { VideoListEditor } from "@/components/courses/VideoListEditor";
 import type { Lesson } from "@/types/database";
 
@@ -22,14 +18,21 @@ interface CourseVideoManagerProps {
   courseId: string;
   teacherId: string;
   lessons: Lesson[];
+  /** admin: 서버 API로 저장(RLS 우회), teacher: 담당 강좌만 */
+  apiVariant: "admin" | "teacher";
 }
 
 type Message = { type: "success" | "error"; text: string } | null;
+
+function lessonsApiBase(variant: "admin" | "teacher", courseId: string) {
+  return `/api/${variant}/courses/${courseId}/lessons`;
+}
 
 export function CourseVideoManager({
   courseId,
   teacherId,
   lessons: initialLessons,
+  apiVariant,
 }: CourseVideoManagerProps) {
   const router = useRouter();
   const [lessons, setLessons] = useState(initialLessons);
@@ -37,6 +40,7 @@ export function CourseVideoManager({
   useEffect(() => {
     setLessons(initialLessons);
   }, [initialLessons]);
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editVideoUrl, setEditVideoUrl] = useState("");
@@ -45,15 +49,12 @@ export function CourseVideoManager({
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<Message>(null);
 
-  /** Parent passes lessons in display order (flattened across sections). */
   const displayLessons = lessons;
 
   function startEdit(lesson: Lesson) {
     setEditingId(lesson.id);
     setEditTitle(lesson.title);
-    setEditVideoUrl(
-      lesson.youtube_url ?? lesson.vimeo_url ?? ""
-    );
+    setEditVideoUrl(lesson.youtube_url ?? lesson.vimeo_url ?? "");
     setEditPublished(lesson.is_published);
     setMessage(null);
   }
@@ -73,40 +74,46 @@ export function CourseVideoManager({
     }
     setLoading(true);
     setMessage(null);
-    const supabase = createClient();
 
-    const videoResult = await withLessonVideoPayload(
-      editVideoUrl,
-      async (videoPayload) => {
-        const { data, error } = await supabase
-          .from("lessons")
-          .update({
+    try {
+      const res = await fetch(
+        `${lessonsApiBase(apiVariant, courseId)}/${lessonId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
             title: editTitle.trim(),
-            ...videoPayload,
-            is_published: editPublished,
-          })
-          .eq("id", lessonId)
-          .select("*")
-          .single();
-        return { data, error };
+            videoUrl: editVideoUrl.trim(),
+            isPublished: editPublished,
+          }),
+        }
+      );
+      const data = (await res.json()) as {
+        ok?: boolean;
+        message?: string;
+        lesson?: Lesson;
+      };
+
+      if (!res.ok || !data.ok || !data.lesson) {
+        setMessage({
+          type: "error",
+          text: data.message ?? "영상 수정에 실패했습니다.",
+        });
+        setLoading(false);
+        return;
       }
-    );
 
-    if (!videoResult.ok) {
-      setMessage({ type: "error", text: videoResult.message });
+      setLessons((prev) =>
+        prev.map((l) => (l.id === lessonId ? data.lesson! : l))
+      );
+      setEditingId(null);
+      setMessage({ type: "success", text: "영상이 수정되었습니다." });
+      router.refresh();
+    } catch {
+      setMessage({ type: "error", text: "영상 수정 중 오류가 발생했습니다." });
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const data = videoResult.data;
-
-    setLessons((prev) =>
-      prev.map((l) => (l.id === lessonId ? (data as Lesson) : l))
-    );
-    setEditingId(null);
-    setMessage({ type: "success", text: "영상이 수정되었습니다." });
-    setLoading(false);
-    router.refresh();
   }
 
   async function deleteLesson(lesson: Lesson, index: number) {
@@ -120,20 +127,32 @@ export function CourseVideoManager({
 
     setLoading(true);
     setMessage(null);
-    const supabase = createClient();
-    const { error } = await supabase.from("lessons").delete().eq("id", lesson.id);
 
-    if (error) {
-      setMessage({ type: "error", text: error.message });
+    try {
+      const res = await fetch(
+        `${lessonsApiBase(apiVariant, courseId)}/${lesson.id}`,
+        { method: "DELETE" }
+      );
+      const data = (await res.json()) as { ok?: boolean; message?: string };
+
+      if (!res.ok || !data.ok) {
+        setMessage({
+          type: "error",
+          text: data.message ?? "영상 삭제에 실패했습니다.",
+        });
+        setLoading(false);
+        return;
+      }
+
+      setLessons((prev) => prev.filter((l) => l.id !== lesson.id));
+      if (editingId === lesson.id) setEditingId(null);
+      setMessage({ type: "success", text: "영상이 삭제되었습니다." });
+      router.refresh();
+    } catch {
+      setMessage({ type: "error", text: "영상 삭제 중 오류가 발생했습니다." });
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setLessons((prev) => prev.filter((l) => l.id !== lesson.id));
-    if (editingId === lesson.id) setEditingId(null);
-    setMessage({ type: "success", text: "영상이 삭제되었습니다." });
-    setLoading(false);
-    router.refresh();
   }
 
   async function saveNewVideos() {
@@ -147,55 +166,37 @@ export function CourseVideoManager({
 
     setLoading(true);
     setMessage(null);
-    const supabase = createClient();
 
     try {
-      const sectionId = await ensureDefaultSection(supabase, courseId);
-      let orderIndex = await getNextLessonOrderIndex(supabase, courseId);
-      const inserted: Lesson[] = [];
+      const res = await fetch(lessonsApiBase(apiVariant, courseId), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teacherId,
+          rows: newRows,
+        }),
+      });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        message?: string;
+        lessons?: Lesson[];
+      };
 
-      for (const row of newRows) {
-        const videoResult = await withLessonVideoPayload(
-          row.videoUrl,
-          async (videoPayload) => {
-            const { data, error } = await supabase
-              .from("lessons")
-              .insert({
-                course_id: courseId,
-                section_id: sectionId,
-                teacher_id: teacherId,
-                title: row.title.trim(),
-                description: null,
-                ...videoPayload,
-                material_url: null,
-                order_index: orderIndex,
-                is_published: true,
-              })
-              .select("*")
-              .single();
-            return { data, error };
-          }
-        );
-
-        if (!videoResult.ok) {
-          setMessage({ type: "error", text: videoResult.message });
-          setLoading(false);
-          return;
-        }
-        inserted.push(videoResult.data as Lesson);
-        orderIndex += 1;
+      if (!res.ok || !data.ok || !data.lessons?.length) {
+        setMessage({
+          type: "error",
+          text: data.message ?? "영상 저장에 실패했습니다.",
+        });
+        setLoading(false);
+        return;
       }
 
-      setLessons((prev) => [...prev, ...inserted]);
+      setLessons((prev) => [...prev, ...data.lessons!]);
       setNewRows([]);
       setMessage({ type: "success", text: "새 영상이 추가되었습니다." });
       router.refresh();
-    } catch (err) {
-      setMessage({
-        type: "error",
-        text:
-          err instanceof Error ? err.message : "영상 추가 중 오류가 발생했습니다.",
-      });
+    } catch {
+      setMessage({ type: "error", text: "영상 추가 중 오류가 발생했습니다." });
     } finally {
       setLoading(false);
     }

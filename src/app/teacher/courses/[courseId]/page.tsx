@@ -30,7 +30,11 @@ export default async function TeacherCoursePage({ params }: PageProps) {
 
   const typedCourse = course as Course;
 
-  const [{ data: sections }, { data: lessons }, { data: enrollments }] =
+  const [
+    { data: sections },
+    { data: lessons, error: lessonsError },
+    { data: enrollments },
+  ] =
     await Promise.all([
       supabase
         .from("sections")
@@ -99,6 +103,11 @@ export default async function TeacherCoursePage({ params }: PageProps) {
           totalLessonCount={lessonList.length}
           enrollmentCount={(enrollments ?? []).length}
         />
+        {lessonsError && (
+          <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            영상 목록을 불러오지 못했습니다: {lessonsError.message}
+          </p>
+        )}
         <CourseVideoManager
           courseId={courseId}
           teacherId={resolveLessonTeacherId(
@@ -106,6 +115,7 @@ export default async function TeacherCoursePage({ params }: PageProps) {
             profile!.id
           )}
           lessons={flatLessons}
+          apiVariant="teacher"
         />
       </section>
 
