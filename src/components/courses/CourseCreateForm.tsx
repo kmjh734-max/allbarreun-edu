@@ -11,7 +11,7 @@ import {
   validateVideoDraftRows,
   type VideoDraftRow,
 } from "@/lib/courses/course-lessons";
-import { lessonVideoFieldsFromUrl } from "@/lib/video/lesson-fields";
+import { withLessonVideoPayload } from "@/lib/video/lesson-persist";
 import { VideoListEditor } from "@/components/courses/VideoListEditor";
 import type { Profile } from "@/types/database";
 
@@ -92,23 +92,28 @@ export function CourseCreateForm({
       let orderIndex = await getNextLessonOrderIndex(supabase, course.id);
 
       for (const row of videoRows) {
-        const videoFields = lessonVideoFieldsFromUrl(row.videoUrl)!;
-        const { error: lessonError } = await supabase.from("lessons").insert({
-          course_id: course.id,
-          section_id: sectionId,
-          teacher_id: lessonTeacherId,
-          title: row.title.trim(),
-          description: null,
-          ...videoFields,
-          material_url: null,
-          order_index: orderIndex,
-          is_published: isPublished,
-        });
+        const videoResult = await withLessonVideoPayload(
+          row.videoUrl,
+          async (videoPayload) => {
+            const { error } = await supabase.from("lessons").insert({
+              course_id: course.id,
+              section_id: sectionId,
+              teacher_id: lessonTeacherId,
+              title: row.title.trim(),
+              description: null,
+              ...videoPayload,
+              material_url: null,
+              order_index: orderIndex,
+              is_published: isPublished,
+            });
+            return { error };
+          }
+        );
 
-        if (lessonError) {
+        if (!videoResult.ok) {
           setMessage({
             type: "error",
-            text: `영상 저장 실패: ${lessonError.message}`,
+            text: `영상 저장 실패: ${videoResult.message}`,
           });
           setLoading(false);
           return;

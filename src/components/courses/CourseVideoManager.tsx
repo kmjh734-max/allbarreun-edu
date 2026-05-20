@@ -13,8 +13,8 @@ import {
 import {
   lessonDisplayVideoUrl,
   lessonProviderLabel,
-  lessonVideoFieldsFromUrl,
 } from "@/lib/video/lesson-fields";
+import { withLessonVideoPayload } from "@/lib/video/lesson-persist";
 import { VideoListEditor } from "@/components/courses/VideoListEditor";
 import type { Lesson } from "@/types/database";
 
@@ -73,35 +73,34 @@ export function CourseVideoManager({
       setMessage({ type: "error", text: "동영상 링크를 입력해 주세요." });
       return;
     }
-    const videoFields = lessonVideoFieldsFromUrl(editVideoUrl);
-    if (!videoFields) {
-      setMessage({
-        type: "error",
-        text: "동영상 링크가 올바르지 않습니다. YouTube 또는 Vimeo 링크를 확인해 주세요.",
-      });
-      return;
-    }
-
     setLoading(true);
     setMessage(null);
     const supabase = createClient();
 
-    const { data, error } = await supabase
-      .from("lessons")
-      .update({
-        title: editTitle.trim(),
-        ...videoFields,
-        is_published: editPublished,
-      })
-      .eq("id", lessonId)
-      .select("*")
-      .single();
+    const videoResult = await withLessonVideoPayload(
+      editVideoUrl,
+      async (videoPayload) => {
+        const { data, error } = await supabase
+          .from("lessons")
+          .update({
+            title: editTitle.trim(),
+            ...videoPayload,
+            is_published: editPublished,
+          })
+          .eq("id", lessonId)
+          .select("*")
+          .single();
+        return { data, error };
+      }
+    );
 
-    if (error) {
-      setMessage({ type: "error", text: error.message });
+    if (!videoResult.ok) {
+      setMessage({ type: "error", text: videoResult.message });
       setLoading(false);
       return;
     }
+
+    const data = videoResult.data;
 
     setLessons((prev) =>
       prev.map((l) => (l.id === lessonId ? (data as Lesson) : l))
@@ -158,29 +157,34 @@ export function CourseVideoManager({
       const inserted: Lesson[] = [];
 
       for (const row of newRows) {
-        const videoFields = lessonVideoFieldsFromUrl(row.videoUrl)!;
-        const { data, error } = await supabase
-          .from("lessons")
-          .insert({
-            course_id: courseId,
-            section_id: sectionId,
-            teacher_id: teacherId,
-            title: row.title.trim(),
-            description: null,
-            ...videoFields,
-            material_url: null,
-            order_index: orderIndex,
-            is_published: courseIsPublished,
-          })
-          .select("*")
-          .single();
+        const videoResult = await withLessonVideoPayload(
+          row.videoUrl,
+          async (videoPayload) => {
+            const { data, error } = await supabase
+              .from("lessons")
+              .insert({
+                course_id: courseId,
+                section_id: sectionId,
+                teacher_id: teacherId,
+                title: row.title.trim(),
+                description: null,
+                ...videoPayload,
+                material_url: null,
+                order_index: orderIndex,
+                is_published: courseIsPublished,
+              })
+              .select("*")
+              .single();
+            return { data, error };
+          }
+        );
 
-        if (error) {
-          setMessage({ type: "error", text: error.message });
+        if (!videoResult.ok) {
+          setMessage({ type: "error", text: videoResult.message });
           setLoading(false);
           return;
         }
-        inserted.push(data as Lesson);
+        inserted.push(videoResult.data as Lesson);
         orderIndex += 1;
       }
 

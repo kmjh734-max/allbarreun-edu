@@ -7,7 +7,7 @@ import {
   VIDEO_LINK_HELP,
   VIDEO_LINK_PLACEHOLDER,
 } from "@/lib/video/parse-url";
-import { lessonVideoFieldsFromUrl } from "@/lib/video/lesson-fields";
+import { withLessonVideoPayload } from "@/lib/video/lesson-persist";
 import type { Section } from "@/types/database";
 
 interface LessonFormProps {
@@ -43,18 +43,6 @@ export function LessonForm({
     setError(null);
 
     const supabase = createClient();
-    const videoFields = videoUrl.trim()
-      ? lessonVideoFieldsFromUrl(videoUrl)
-      : null;
-
-    if (videoUrl.trim() && !videoFields) {
-      setError(
-        "올바른 동영상 링크를 입력해 주세요. (YouTube 또는 Vimeo)"
-      );
-      setLoading(false);
-      return;
-    }
-
     const { data: maxLesson } = await supabase
       .from("lessons")
       .select("order_index")
@@ -86,26 +74,40 @@ export function LessonForm({
       materialUrl = publicUrl.publicUrl;
     }
 
-    const { error: insertError } = await supabase.from("lessons").insert({
-      course_id: courseId,
-      section_id: sectionId,
-      teacher_id: teacherId,
-      title: title.trim(),
-      description: description || null,
-      ...(videoFields ?? {
-        video_provider: "vimeo",
-        vimeo_url: null,
-        vimeo_video_id: null,
-        youtube_url: null,
-        youtube_video_id: null,
-      }),
-      material_url: materialUrl,
-      order_index: orderIndex,
-      is_published: isPublished,
-    });
+    const videoResult = videoUrl.trim()
+      ? await withLessonVideoPayload(videoUrl, async (videoPayload) => {
+          const { error } = await supabase.from("lessons").insert({
+            course_id: courseId,
+            section_id: sectionId,
+            teacher_id: teacherId,
+            title: title.trim(),
+            description: description || null,
+            ...videoPayload,
+            material_url: materialUrl,
+            order_index: orderIndex,
+            is_published: isPublished,
+          });
+          return { error };
+        })
+      : await (async () => {
+          const { error } = await supabase.from("lessons").insert({
+            course_id: courseId,
+            section_id: sectionId,
+            teacher_id: teacherId,
+            title: title.trim(),
+            description: description || null,
+            vimeo_url: null,
+            vimeo_video_id: null,
+            material_url: materialUrl,
+            order_index: orderIndex,
+            is_published: isPublished,
+          });
+          if (error) return { ok: false as const, message: error.message };
+          return { ok: true as const, data: null };
+        })();
 
-    if (insertError) {
-      setError(insertError.message);
+    if (!videoResult.ok) {
+      setError(videoResult.message);
       setLoading(false);
       return;
     }
