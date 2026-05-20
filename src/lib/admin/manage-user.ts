@@ -27,12 +27,15 @@ function isMissingColumnError(
 async function selectProfileAfterWrite(
   admin: SupabaseClient,
   userId: string,
-  usedCreatedBy: boolean
+  withCreatedBy: boolean
 ) {
-  const selectCols = usedCreatedBy
-    ? PROFILE_SELECT_WITH_CREATED_BY
-    : PROFILE_SELECT_BASE;
-  return admin.from("profiles").select(selectCols).eq("id", userId);
+  if (withCreatedBy) {
+    return admin
+      .from("profiles")
+      .select(PROFILE_SELECT_WITH_CREATED_BY)
+      .eq("id", userId);
+  }
+  return admin.from("profiles").select(PROFILE_SELECT_BASE).eq("id", userId);
 }
 
 const ROLE_LABEL: Record<"student" | "teacher", string> = {
@@ -135,18 +138,19 @@ async function syncProfileAfterAuthCreate(
     };
   }
 
-  let profile = rows?.[0] ?? null;
+  let profile: Record<string, unknown> | null =
+    (rows?.[0] as Record<string, unknown> | undefined) ?? null;
 
   if (!profile) {
-    const tryInsert = async (body: Record<string, unknown>, withCreatedBy: boolean) => {
-      const selectCols = withCreatedBy
-        ? PROFILE_SELECT_WITH_CREATED_BY
-        : PROFILE_SELECT_BASE;
-      return admin
-        .from("profiles")
-        .insert({ id: userId, ...body })
-        .select(selectCols)
-        .single();
+    const tryInsert = async (
+      body: Record<string, unknown>,
+      withCreatedBy: boolean
+    ) => {
+      const query = admin.from("profiles").insert({ id: userId, ...body });
+      if (withCreatedBy) {
+        return query.select(PROFILE_SELECT_WITH_CREATED_BY).single();
+      }
+      return query.select(PROFILE_SELECT_BASE).single();
     };
 
     let { data: inserted, error: insertError } = await tryInsert(
@@ -187,7 +191,7 @@ async function syncProfileAfterAuthCreate(
         status: 500,
       };
     }
-    profile = inserted;
+    profile = inserted as Record<string, unknown> | null;
   }
 
   if (!profile) {
@@ -209,13 +213,13 @@ async function syncProfileAfterAuthCreate(
     if (roleFixError) {
       return { ok: false, message: roleFixError.message, status: 500 };
     }
-    if (fixed) profile = fixed;
+    if (fixed) profile = fixed as Record<string, unknown>;
   }
 
   return {
     ok: true,
     message: "",
-    profile: profile as Record<string, unknown>,
+    profile,
   };
 }
 
@@ -461,12 +465,18 @@ export async function updateManagedAccount(
     };
   }
 
-  let { data: profile, error: updateError } = await admin
+  let profile: Record<string, unknown> | null = null;
+  let updateError: { message: string } | null = null;
+
+  const primaryUpdate = await admin
     .from("profiles")
     .update(updates)
     .eq("id", id)
     .select(PROFILE_SELECT_WITH_CREATED_BY)
     .single();
+
+  profile = (primaryUpdate.data as Record<string, unknown> | null) ?? null;
+  updateError = primaryUpdate.error;
 
   if (updateError && isMissingColumnError(updateError.message, "created_by")) {
     const fallback = await admin
@@ -475,7 +485,7 @@ export async function updateManagedAccount(
       .eq("id", id)
       .select(PROFILE_SELECT_BASE)
       .single();
-    profile = fallback.data;
+    profile = (fallback.data as Record<string, unknown> | null) ?? null;
     updateError = fallback.error;
   }
 
