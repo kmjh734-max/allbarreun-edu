@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+  }
+}
+
+@layer components {
+  .ui-input {
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100;
+  }
+
+  .ui-select {
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100;
+  }
+
+  .ui-label {
+    @apply mb-1.5 block text-sm font-medium text-slate-700;
+  }
+
+  .ui-table-wrap {
+    @apply overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-card;
+  }
+
+  .ui-table {
+    @apply w-full min-w-[640px] text-left text-sm;
+  }
+
+  .ui-table thead {
+    @apply border-b border-slate-200 bg-slate-50/90;
+  }
+
+  .ui-table th {
+    @apply whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600;
+  }
+
+  .ui-table tbody tr {
+    @apply border-b border-slate-100 last:border-0;
+  }
+
+  .ui-table td {
+    @apply px-4 py-3 text-slate-700;
+  }
+
+  .ui-section-card {
+    @apply rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6;
+  }
+}
