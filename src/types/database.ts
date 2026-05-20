@@ -37,8 +37,11 @@ export interface Lesson {
   teacher_id: string | null;
   title: string;
   description: string | null;
+  video_provider?: "vimeo" | "youtube" | null;
   vimeo_url: string | null;
   vimeo_video_id: string | null;
+  youtube_url: string | null;
+  youtube_video_id: string | null;
   material_url: string | null;
   order_index: number;
   is_published: boolean;

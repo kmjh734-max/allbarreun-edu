@@ -1,16 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { extractVimeoVideoId } from "@/lib/vimeo/parse-url";
+import { parseVideoLink } from "@/lib/video/parse-url";
 import type { Lesson, Section } from "@/types/database";
 
 export const DEFAULT_SECTION_TITLE = "전체 강의";
 
 export interface VideoDraftRow {
   title: string;
-  vimeoUrl: string;
+  videoUrl: string;
 }
 
 export function createEmptyVideoRow(): VideoDraftRow {
-  return { title: "", vimeoUrl: "" };
+  return { title: "", videoUrl: "" };
 }
 
 export function validateVideoDraftRows(
@@ -26,13 +26,13 @@ export function validateVideoDraftRows(
     if (!row.title.trim()) {
       return { ok: false, message: `${n}번 영상 제목을 입력해 주세요.` };
     }
-    if (!row.vimeoUrl.trim()) {
-      return { ok: false, message: `${n}번 Vimeo 주소를 입력해 주세요.` };
+    if (!row.videoUrl.trim()) {
+      return { ok: false, message: `${n}번 동영상 링크를 입력해 주세요.` };
     }
-    if (!extractVimeoVideoId(row.vimeoUrl)) {
+    if (!parseVideoLink(row.videoUrl)) {
       return {
         ok: false,
-        message: `${n}번 Vimeo 주소가 올바르지 않습니다. 링크를 확인해 주세요.`,
+        message: `${n}번 동영상 링크가 올바르지 않습니다. YouTube 또는 Vimeo 링크를 확인해 주세요.`,
       };
     }
   }

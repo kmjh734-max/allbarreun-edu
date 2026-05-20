@@ -66,9 +66,12 @@ export default async function StudentLessonPage({ params }: PageProps) {
       <div className="mt-6">
         <StudentLessonWatch
           lessonId={lessonId}
+          title={typedLesson.title}
+          videoProvider={typedLesson.video_provider}
           vimeoUrl={typedLesson.vimeo_url}
           vimeoVideoId={typedLesson.vimeo_video_id}
-          title={typedLesson.title}
+          youtubeUrl={typedLesson.youtube_url}
+          youtubeVideoId={typedLesson.youtube_video_id}
           initialIsCompleted={isCompleted}
           initialProgressPercent={progressPercent}
           initialWatchedSeconds={

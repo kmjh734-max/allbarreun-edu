@@ -10,7 +10,11 @@ import {
   validateVideoDraftRows,
   type VideoDraftRow,
 } from "@/lib/courses/course-lessons";
-import { extractVimeoVideoId } from "@/lib/vimeo/parse-url";
+import {
+  lessonDisplayVideoUrl,
+  lessonProviderLabel,
+  lessonVideoFieldsFromUrl,
+} from "@/lib/video/lesson-fields";
 import { VideoListEditor } from "@/components/courses/VideoListEditor";
 import type { Lesson } from "@/types/database";
 
@@ -37,7 +41,7 @@ export function CourseVideoManager({
   }, [initialLessons]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
-  const [editVimeoUrl, setEditVimeoUrl] = useState("");
+  const [editVideoUrl, setEditVideoUrl] = useState("");
   const [editPublished, setEditPublished] = useState(true);
   const [newRows, setNewRows] = useState<VideoDraftRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,7 +53,9 @@ export function CourseVideoManager({
   function startEdit(lesson: Lesson) {
     setEditingId(lesson.id);
     setEditTitle(lesson.title);
-    setEditVimeoUrl(lesson.vimeo_url ?? "");
+    setEditVideoUrl(
+      lesson.youtube_url ?? lesson.vimeo_url ?? ""
+    );
     setEditPublished(lesson.is_published);
     setMessage(null);
   }
@@ -63,15 +69,15 @@ export function CourseVideoManager({
       setMessage({ type: "error", text: "동영상 제목을 입력해 주세요." });
       return;
     }
-    if (!editVimeoUrl.trim()) {
-      setMessage({ type: "error", text: "Vimeo 주소를 입력해 주세요." });
+    if (!editVideoUrl.trim()) {
+      setMessage({ type: "error", text: "동영상 링크를 입력해 주세요." });
       return;
     }
-    const vimeoVideoId = extractVimeoVideoId(editVimeoUrl);
-    if (!vimeoVideoId) {
+    const videoFields = lessonVideoFieldsFromUrl(editVideoUrl);
+    if (!videoFields) {
       setMessage({
         type: "error",
-        text: "Vimeo 주소가 올바르지 않습니다. 링크를 확인해 주세요.",
+        text: "동영상 링크가 올바르지 않습니다. YouTube 또는 Vimeo 링크를 확인해 주세요.",
       });
       return;
     }
@@ -84,8 +90,7 @@ export function CourseVideoManager({
       .from("lessons")
       .update({
         title: editTitle.trim(),
-        vimeo_url: editVimeoUrl.trim(),
-        vimeo_video_id: vimeoVideoId,
+        ...videoFields,
         is_published: editPublished,
       })
       .eq("id", lessonId)
@@ -153,7 +158,7 @@ export function CourseVideoManager({
       const inserted: Lesson[] = [];
 
       for (const row of newRows) {
-        const vimeoVideoId = extractVimeoVideoId(row.vimeoUrl)!;
+        const videoFields = lessonVideoFieldsFromUrl(row.videoUrl)!;
         const { data, error } = await supabase
           .from("lessons")
           .insert({
@@ -162,8 +167,7 @@ export function CourseVideoManager({
             teacher_id: teacherId,
             title: row.title.trim(),
             description: null,
-            vimeo_url: row.vimeoUrl.trim(),
-            vimeo_video_id: vimeoVideoId,
+            ...videoFields,
             material_url: null,
             order_index: orderIndex,
             is_published: courseIsPublished,
@@ -240,11 +244,11 @@ export function CourseVideoManager({
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">
-                        Vimeo 주소
+                        동영상 링크
                       </label>
                       <input
-                        value={editVimeoUrl}
-                        onChange={(e) => setEditVimeoUrl(e.target.value)}
+                        value={editVideoUrl}
+                        onChange={(e) => setEditVideoUrl(e.target.value)}
                         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                       />
                     </div>
@@ -290,7 +294,10 @@ export function CourseVideoManager({
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-slate-900">{lesson.title}</p>
                   <p className="mt-0.5 truncate text-xs text-slate-500">
-                    {lesson.vimeo_url ?? "Vimeo 미등록"}
+                    {lessonDisplayVideoUrl(lesson)}
+                    {lessonProviderLabel(lesson)
+                      ? ` · ${lessonProviderLabel(lesson)}`
+                      : ""}
                   </p>
                 </div>
                 <span

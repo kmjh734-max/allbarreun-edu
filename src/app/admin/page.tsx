@@ -30,7 +30,7 @@ export default async function AdminDashboardPage() {
     {
       href: "/admin/courses",
       title: "강좌 관리",
-      description: "강좌·영상 등록, Vimeo 연결, 담당 강사 및 공개 설정",
+      description: "강좌·영상 등록, YouTube/Vimeo 연결, 담당 강사 및 공개 설정",
       stat: courseCount ?? 0,
       statLabel: "등록 강좌",
       icon: <BookIcon />,

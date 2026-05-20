@@ -3,7 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { extractVimeoVideoId } from "@/lib/vimeo/parse-url";
+import {
+  VIDEO_LINK_HELP,
+  VIDEO_LINK_PLACEHOLDER,
+} from "@/lib/video/parse-url";
+import { lessonVideoFieldsFromUrl } from "@/lib/video/lesson-fields";
 import type { Section } from "@/types/database";
 
 interface LessonFormProps {
@@ -25,7 +29,7 @@ export function LessonForm({
   const [sectionId, setSectionId] = useState(sections[0]?.id ?? "");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [vimeoUrl, setVimeoUrl] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
   const [isPublished, setIsPublished] = useState(false);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -39,10 +43,14 @@ export function LessonForm({
     setError(null);
 
     const supabase = createClient();
-    const vimeoVideoId = vimeoUrl ? extractVimeoVideoId(vimeoUrl) : null;
+    const videoFields = videoUrl.trim()
+      ? lessonVideoFieldsFromUrl(videoUrl)
+      : null;
 
-    if (vimeoUrl && !vimeoVideoId) {
-      setError("올바른 동영상 링크(Vimeo)를 입력해 주세요.");
+    if (videoUrl.trim() && !videoFields) {
+      setError(
+        "올바른 동영상 링크를 입력해 주세요. (YouTube 또는 Vimeo)"
+      );
       setLoading(false);
       return;
     }
@@ -84,8 +92,13 @@ export function LessonForm({
       teacher_id: teacherId,
       title: title.trim(),
       description: description || null,
-      vimeo_url: vimeoUrl || null,
-      vimeo_video_id: vimeoVideoId,
+      ...(videoFields ?? {
+        video_provider: "vimeo",
+        vimeo_url: null,
+        vimeo_video_id: null,
+        youtube_url: null,
+        youtube_video_id: null,
+      }),
       material_url: materialUrl,
       order_index: orderIndex,
       is_published: isPublished,
@@ -99,7 +112,7 @@ export function LessonForm({
 
     setTitle("");
     setDescription("");
-    setVimeoUrl("");
+    setVideoUrl("");
     setPdfFile(null);
     setIsPublished(false);
     router.refresh();
@@ -113,10 +126,6 @@ export function LessonForm({
       </p>
     );
   }
-
-  const vimeoHelpText = isAdminUi
-    ? "Vimeo에 업로드한 영상의 공유 링크를 붙여 넣어 주세요."
-    : "Vimeo에 업로드한 영상 공유 링크를 붙여넣으세요.";
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -165,16 +174,16 @@ export function LessonForm({
 
       <div>
         <label className="mb-1 block text-sm font-medium text-slate-700">
-          {isAdminUi ? "Vimeo 영상 링크" : "Vimeo 영상 링크"}
+          동영상 링크 (YouTube / Vimeo)
         </label>
         <input
           type="url"
-          value={vimeoUrl}
-          onChange={(e) => setVimeoUrl(e.target.value)}
-          placeholder="https://vimeo.com/123456789"
+          value={videoUrl}
+          onChange={(e) => setVideoUrl(e.target.value)}
+          placeholder={VIDEO_LINK_PLACEHOLDER}
           className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
         />
-        <p className="mt-1 text-xs text-slate-500">{vimeoHelpText}</p>
+        <p className="mt-1 text-xs text-slate-500">{VIDEO_LINK_HELP}</p>
       </div>
 
       <div>

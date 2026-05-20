@@ -11,7 +11,7 @@ import {
   validateVideoDraftRows,
   type VideoDraftRow,
 } from "@/lib/courses/course-lessons";
-import { extractVimeoVideoId } from "@/lib/vimeo/parse-url";
+import { lessonVideoFieldsFromUrl } from "@/lib/video/lesson-fields";
 import { VideoListEditor } from "@/components/courses/VideoListEditor";
 import type { Profile } from "@/types/database";
 
@@ -92,15 +92,14 @@ export function CourseCreateForm({
       let orderIndex = await getNextLessonOrderIndex(supabase, course.id);
 
       for (const row of videoRows) {
-        const vimeoVideoId = extractVimeoVideoId(row.vimeoUrl)!;
+        const videoFields = lessonVideoFieldsFromUrl(row.videoUrl)!;
         const { error: lessonError } = await supabase.from("lessons").insert({
           course_id: course.id,
           section_id: sectionId,
           teacher_id: lessonTeacherId,
           title: row.title.trim(),
           description: null,
-          vimeo_url: row.vimeoUrl.trim(),
-          vimeo_video_id: vimeoVideoId,
+          ...videoFields,
           material_url: null,
           order_index: orderIndex,
           is_published: isPublished,
