@@ -2,8 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { buildVimeoEmbedUrl, buildYouTubeEmbedUrl } from "@/lib/video/parse-url";
+import { buildVimeoEmbedUrl } from "@/lib/video/parse-url";
 import { loadYouTubeIframeApi } from "@/lib/video/load-youtube-api";
+import {
+  isYouTubeEmbedBlockedError,
+  youtubeEmbedFallbackUrl,
+  youtubeWatchUrl,
+} from "@/lib/video/youtube-embed-fallback";
 import { resolveLessonVideo } from "@/lib/video/lesson-fields";
 import { shouldPersistProgress } from "@/lib/lesson-progress/save-throttle";
 import {
@@ -86,7 +91,9 @@ export function StudentLessonWatch({
   });
 
   const [iframeEl, setIframeEl] = useState<HTMLIFrameElement | null>(null);
-  const [ytIframeEl, setYtIframeEl] = useState<HTMLIFrameElement | null>(null);
+  const [ytContainerEl, setYtContainerEl] = useState<HTMLDivElement | null>(null);
+  const [ytUsePlainIframe, setYtUsePlainIframe] = useState(false);
+  const [ytEmbedBlocked, setYtEmbedBlocked] = useState(false);
   const playerRef = useRef<PlayerHandle | null>(null);
   const completionSentRef = useRef(initialIsCompleted);
   const maxWatchedSecondsRef = useRef(Math.max(0, initialWatchedSeconds));
@@ -110,6 +117,12 @@ export function StudentLessonWatch({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [seekNotice, setSeekNotice] = useState<string | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
+
+  useEffect(() => {
+    setYtUsePlainIframe(false);
+    setYtEmbedBlocked(false);
+    setPlayerReady(false);
+  }, [lessonId, resolved?.videoId, resolved?.provider]);
 
   const persistProgress = useCallback(
     async (
@@ -405,45 +418,97 @@ export function StudentLessonWatch({
       };
     }
 
-    if (!ytIframeEl || resolved.provider !== "youtube") return;
+    if (resolved.provider !== "youtube") return;
+    if (!ytUsePlainIframe && !ytContainerEl) return;
 
     const youtubeVideoId = resolved.videoId;
     let ytPlayer: YT.Player | null = null;
     let pollId = 0;
     let lastYtSeconds = 0;
+    let pendingResumeSeek = maxWatchedSecondsRef.current > 0;
+    let apiReady = false;
+
+    if (ytUsePlainIframe) {
+      setPlayerReady(true);
+      return () => {
+        disposed = true;
+      };
+    }
+
+    const apiFallbackTimer = window.setTimeout(() => {
+      if (!disposed && !apiReady) {
+        setYtUsePlainIframe(true);
+        setPlayerReady(true);
+        setSaveError(
+          "플레이어 API 연결이 지연되어 일반 재생 모드로 전환했습니다. 진도는 제한적으로 저장됩니다."
+        );
+      }
+    }, 12000);
 
     async function attachYouTube() {
       if (disposed) return;
 
       try {
         await loadYouTubeIframeApi();
-        if (disposed || !ytIframeEl) return;
+        if (disposed || !ytContainerEl) return;
 
-        ytPlayer = new YT.Player(ytIframeEl, {
+        ytPlayer = new YT.Player(ytContainerEl, {
+          videoId: youtubeVideoId,
+          width: "100%",
+          height: "100%",
+          playerVars: {
+            start: Math.max(0, Math.floor(resumeSeconds)),
+            rel: 0,
+            modestbranding: 1,
+            playsinline: 1,
+            origin:
+              typeof window !== "undefined" ? window.location.origin : "",
+          },
           events: {
             onReady: (event) => {
               if (disposed) return;
+              apiReady = true;
+              window.clearTimeout(apiFallbackTimer);
               playerRef.current = { kind: "youtube", player: event.target };
               setPlayerReady(true);
-
-              const resumeTo = maxWatchedSecondsRef.current;
-              if (resumeTo > 0 && !completionSentRef.current) {
-                const seekTo = Math.max(0, resumeTo - 1);
-                try {
-                  event.target.seekTo(seekTo, true);
-                  lastTickSecondsRef.current = seekTo;
-                  lastYtSeconds = seekTo;
-                  resumeGraceUntilRef.current = Date.now() + 4000;
-                } catch {
-                  /* ignore */
-                }
+            },
+            onError: (event) => {
+              if (disposed) return;
+              window.clearTimeout(apiFallbackTimer);
+              if (isYouTubeEmbedBlockedError(event.data)) {
+                setYtEmbedBlocked(true);
+                setPlayerReady(true);
+                return;
               }
+              setYtUsePlainIframe(true);
+              setPlayerReady(true);
             },
             onStateChange: (event) => {
               if (disposed || completionSentRef.current) return;
 
               const duration = event.target.getDuration();
               if (duration <= 0) return;
+
+              if (
+                pendingResumeSeek &&
+                !completionSentRef.current &&
+                (event.data === YT.PlayerState.PLAYING ||
+                  event.data === YT.PlayerState.BUFFERING)
+              ) {
+                const resumeTo = maxWatchedSecondsRef.current;
+                if (resumeTo > 0) {
+                  const seekTo = Math.max(0, resumeTo - 1);
+                  try {
+                    event.target.seekTo(seekTo, true);
+                    lastTickSecondsRef.current = seekTo;
+                    lastYtSeconds = seekTo;
+                    resumeGraceUntilRef.current = Date.now() + 4000;
+                  } catch {
+                    /* ignore */
+                  }
+                }
+                pendingResumeSeek = false;
+              }
 
               if (event.data === YT.PlayerState.ENDED) {
                 maxWatchedSecondsRef.current = Math.max(
@@ -497,9 +562,11 @@ export function StudentLessonWatch({
         });
       } catch (err) {
         console.error("[StudentLessonWatch] YouTube init failed:", err);
+        window.clearTimeout(apiFallbackTimer);
+        setYtUsePlainIframe(true);
         setPlayerReady(true);
         setSaveError(
-          "진도 자동 저장은 제한될 수 있습니다. 영상은 재생되니 끝까지 시청해 주세요."
+          "일반 재생 모드로 전환했습니다. 끝까지 시청해 주세요."
         );
       }
     }
@@ -521,6 +588,7 @@ export function StudentLessonWatch({
 
     return () => {
       disposed = true;
+      window.clearTimeout(apiFallbackTimer);
       window.clearInterval(pollId);
       setPlayerReady(false);
       try {
@@ -533,7 +601,8 @@ export function StudentLessonWatch({
   }, [
     resolved,
     iframeEl,
-    ytIframeEl,
+    ytContainerEl,
+    ytUsePlainIframe,
     resumeSeconds,
     getPlaybackState,
   ]);
@@ -588,9 +657,11 @@ export function StudentLessonWatch({
   }
 
   const isVimeo = resolved.provider === "vimeo";
-  const embedUrl = isVimeo
-    ? buildVimeoEmbedUrl(resolved.videoId, resumeSeconds)
-    : buildYouTubeEmbedUrl(resolved.videoId, resumeSeconds);
+  const vimeoEmbedUrl = buildVimeoEmbedUrl(resolved.videoId, resumeSeconds);
+  const youtubeEmbedUrl = youtubeEmbedFallbackUrl(
+    resolved.videoId,
+    resumeSeconds
+  );
 
   return (
     <div className="space-y-6">
@@ -609,20 +680,37 @@ export function StudentLessonWatch({
           {isVimeo ? (
             <iframe
               ref={setIframeEl}
-              src={embedUrl}
+              src={vimeoEmbedUrl}
               title={title}
               className="absolute inset-0 h-full w-full border-0"
               allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
               allowFullScreen
             />
-          ) : (
+          ) : ytEmbedBlocked ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-900 px-4 text-center text-sm text-white">
+              <p>이 영상은 다른 사이트에 임베드할 수 없습니다.</p>
+              <a
+                href={youtubeWatchUrl(resolved.videoId)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700"
+              >
+                YouTube에서 열기
+              </a>
+            </div>
+          ) : ytUsePlainIframe ? (
             <iframe
-              ref={setYtIframeEl}
-              src={embedUrl}
+              src={youtubeEmbedUrl}
               title={title}
               className="absolute inset-0 h-full w-full border-0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
+            />
+          ) : (
+            <div
+              ref={setYtContainerEl}
+              className="absolute inset-0 h-full w-full"
+              title={title}
             />
           )}
         </div>

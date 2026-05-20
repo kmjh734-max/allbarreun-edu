@@ -116,20 +116,20 @@ export function parseVideoLink(url: string): ParsedVideoLink | null {
 
 export function buildYouTubeEmbedUrl(
   videoId: string,
-  startSeconds?: number
+  startSeconds?: number,
+  options?: { enableJsApi?: boolean }
 ): string {
   const params = new URLSearchParams({
     rel: "0",
     modestbranding: "1",
     playsinline: "1",
-    enablejsapi: "1",
   });
+  if (options?.enableJsApi) {
+    params.set("enablejsapi", "1");
+  }
   const start = Math.max(0, Math.floor(startSeconds ?? 0));
   if (start > 0) {
     params.set("start", String(start));
-  }
-  if (typeof window !== "undefined") {
-    params.set("origin", window.location.origin);
   }
   return `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
 }
