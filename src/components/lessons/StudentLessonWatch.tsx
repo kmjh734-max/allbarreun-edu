@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { buildVimeoEmbedUrl } from "@/lib/video/parse-url";
+import { buildVimeoEmbedUrl, buildYouTubeEmbedUrl } from "@/lib/video/parse-url";
 import { loadYouTubeIframeApi } from "@/lib/video/load-youtube-api";
 import { resolveLessonVideo } from "@/lib/video/lesson-fields";
 import { shouldPersistProgress } from "@/lib/lesson-progress/save-throttle";
@@ -86,9 +86,7 @@ export function StudentLessonWatch({
   });
 
   const [iframeEl, setIframeEl] = useState<HTMLIFrameElement | null>(null);
-  const [ytContainerEl, setYtContainerEl] = useState<HTMLDivElement | null>(
-    null
-  );
+  const [ytIframeEl, setYtIframeEl] = useState<HTMLIFrameElement | null>(null);
   const playerRef = useRef<PlayerHandle | null>(null);
   const completionSentRef = useRef(initialIsCompleted);
   const maxWatchedSecondsRef = useRef(Math.max(0, initialWatchedSeconds));
@@ -407,7 +405,7 @@ export function StudentLessonWatch({
       };
     }
 
-    if (!ytContainerEl || resolved.provider !== "youtube") return;
+    if (!ytIframeEl || resolved.provider !== "youtube") return;
 
     const youtubeVideoId = resolved.videoId;
     let ytPlayer: YT.Player | null = null;
@@ -419,20 +417,9 @@ export function StudentLessonWatch({
 
       try {
         await loadYouTubeIframeApi();
-        if (disposed || !ytContainerEl) return;
+        if (disposed || !ytIframeEl) return;
 
-        const start = Math.max(0, Math.floor(resumeSeconds));
-
-        ytPlayer = new YT.Player(ytContainerEl, {
-          videoId: youtubeVideoId,
-          width: "100%",
-          height: "100%",
-          playerVars: {
-            start,
-            rel: 0,
-            modestbranding: 1,
-            playsinline: 1,
-          },
+        ytPlayer = new YT.Player(ytIframeEl, {
           events: {
             onReady: (event) => {
               if (disposed) return;
@@ -510,8 +497,9 @@ export function StudentLessonWatch({
         });
       } catch (err) {
         console.error("[StudentLessonWatch] YouTube init failed:", err);
+        setPlayerReady(true);
         setSaveError(
-          "영상 플레이어 연결에 실패했습니다. 새로고침 후 다시 시도해 주세요."
+          "진도 자동 저장은 제한될 수 있습니다. 영상은 재생되니 끝까지 시청해 주세요."
         );
       }
     }
@@ -545,7 +533,7 @@ export function StudentLessonWatch({
   }, [
     resolved,
     iframeEl,
-    ytContainerEl,
+    ytIframeEl,
     resumeSeconds,
     getPlaybackState,
   ]);
@@ -602,7 +590,7 @@ export function StudentLessonWatch({
   const isVimeo = resolved.provider === "vimeo";
   const embedUrl = isVimeo
     ? buildVimeoEmbedUrl(resolved.videoId, resumeSeconds)
-    : null;
+    : buildYouTubeEmbedUrl(resolved.videoId, resumeSeconds);
 
   return (
     <div className="space-y-6">
@@ -621,17 +609,20 @@ export function StudentLessonWatch({
           {isVimeo ? (
             <iframe
               ref={setIframeEl}
-              src={embedUrl!}
+              src={embedUrl}
               title={title}
               className="absolute inset-0 h-full w-full border-0"
               allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
               allowFullScreen
             />
           ) : (
-            <div
-              ref={setYtContainerEl}
-              className="absolute inset-0 h-full w-full"
+            <iframe
+              ref={setYtIframeEl}
+              src={embedUrl}
               title={title}
+              className="absolute inset-0 h-full w-full border-0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
             />
           )}
         </div>

@@ -8,11 +8,20 @@ export const LESSON_VIDEO_MIGRATION_HINT =
 
 export function isLessonVideoSchemaError(message: string | undefined): boolean {
   const m = message ?? "";
-  return (
+  if (
     (m.includes("video_provider") ||
       m.includes("youtube_url") ||
       m.includes("youtube_video_id")) &&
     (m.includes("schema cache") || m.includes("Could not find"))
+  ) {
+    return true;
+  }
+  return (
+    (m.includes("youtube") || m.includes("video_provider")) &&
+    (m.includes("column") ||
+      m.includes("schema") ||
+      m.includes("Could not find") ||
+      m.includes("does not exist"))
   );
 }
 
@@ -27,6 +36,26 @@ export function lessonVideoFieldsVimeoOnly(
     vimeo_url: fields.vimeo_url,
     vimeo_video_id: fields.vimeo_video_id,
   };
+}
+
+/**
+ * YouTube 컬럼이 없는 DB: 링크·ID를 vimeo_url / vimeo_video_id 에 저장.
+ * 재생 시 resolveLessonVideo 가 URL에서 YouTube 로 인식합니다.
+ */
+export function lessonVideoFieldsLegacyStorage(
+  fields: LessonVideoRowInput
+): { vimeo_url: string; vimeo_video_id: string } | null {
+  if (
+    fields.video_provider === "youtube" &&
+    fields.youtube_url &&
+    fields.youtube_video_id
+  ) {
+    return {
+      vimeo_url: fields.youtube_url,
+      vimeo_video_id: fields.youtube_video_id,
+    };
+  }
+  return lessonVideoFieldsVimeoOnly(fields);
 }
 
 type ApplyResult<T> = {
@@ -60,7 +89,7 @@ export async function withLessonVideoPayload<T>(
     return { ok: false, message: result.error.message };
   }
 
-  const legacy = lessonVideoFieldsVimeoOnly(fields);
+  const legacy = lessonVideoFieldsLegacyStorage(fields);
   if (!legacy) {
     return {
       ok: false,

@@ -47,7 +47,11 @@ export function extractYouTubeVideoId(url: string): string | null {
       return id && /^[\w-]{11}$/.test(id) ? id : null;
     }
 
-    if (host === "youtube.com" || host === "m.youtube.com") {
+    if (
+      host === "youtube.com" ||
+      host === "m.youtube.com" ||
+      host === "music.youtube.com"
+    ) {
       const v = parsed.searchParams.get("v");
       if (v && /^[\w-]{11}$/.test(v)) return v;
 
@@ -97,6 +101,7 @@ export function parseVideoLink(url: string): ParsedVideoLink | null {
   if (
     lower.includes("youtube.com") ||
     lower.includes("youtu.be") ||
+    lower.includes("youtube-nocookie.com") ||
     /^[\w-]{11}$/.test(trimmed)
   ) {
     const videoId = extractYouTubeVideoId(trimmed);
@@ -107,6 +112,26 @@ export function parseVideoLink(url: string): ParsedVideoLink | null {
   if (vimeoId) return { provider: "vimeo", videoId: vimeoId };
 
   return null;
+}
+
+export function buildYouTubeEmbedUrl(
+  videoId: string,
+  startSeconds?: number
+): string {
+  const params = new URLSearchParams({
+    rel: "0",
+    modestbranding: "1",
+    playsinline: "1",
+    enablejsapi: "1",
+  });
+  const start = Math.max(0, Math.floor(startSeconds ?? 0));
+  if (start > 0) {
+    params.set("start", String(start));
+  }
+  if (typeof window !== "undefined") {
+    params.set("origin", window.location.origin);
+  }
+  return `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
 }
 
 export function buildVimeoEmbedUrl(

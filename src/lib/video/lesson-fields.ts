@@ -72,8 +72,22 @@ export function resolveLessonVideo(
     }
   }
 
+  if (lesson.vimeo_video_id?.trim()) {
+    const idFromVimeoCol = extractYouTubeVideoId(lesson.vimeo_video_id);
+    if (idFromVimeoCol) {
+      return {
+        provider: "youtube",
+        videoId: idFromVimeoCol,
+        url: lesson.vimeo_url ?? `https://www.youtube.com/watch?v=${idFromVimeoCol}`,
+      };
+    }
+  }
+
   const provider: VideoProvider =
-    lesson.video_provider === "youtube" || lesson.youtube_video_id
+    lesson.video_provider === "youtube" ||
+    lesson.youtube_video_id ||
+    (lesson.vimeo_url &&
+      (lesson.vimeo_url.includes("youtube") || lesson.vimeo_url.includes("youtu.be")))
       ? "youtube"
       : "vimeo";
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { buildVimeoEmbedUrl } from "@/lib/video/parse-url";
+import { buildVimeoEmbedUrl, buildYouTubeEmbedUrl } from "@/lib/video/parse-url";
 import { resolveLessonVideo } from "@/lib/video/lesson-fields";
 
 interface VimeoPlayerProps {
@@ -10,10 +10,6 @@ interface VimeoPlayerProps {
   youtubeVideoId?: string | null;
   videoProvider?: string | null;
   title?: string;
-}
-
-function buildYouTubeEmbedUrl(videoId: string): string {
-  return `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1`;
 }
 
 export function VimeoPlayer({
