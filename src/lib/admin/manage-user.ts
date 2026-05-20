@@ -54,6 +54,15 @@ export async function createManagedAccount(
     return { ok: false, message: `${label} 이름을 입력해 주세요.`, status: 400 };
   }
 
+  if (!username) {
+    return {
+      ok: false,
+      message:
+        "아이디는 영문 소문자·숫자만 사용할 수 있습니다. (한글·특수문자는 사용할 수 없습니다.)",
+      status: 400,
+    };
+  }
+
   if (!isValidUsername(username)) {
     return {
       ok: false,
@@ -100,19 +109,32 @@ export async function createManagedAccount(
     };
   }
 
+  const metadata: Record<string, string> = {
+    name,
+    role: input.role,
+    username,
+  };
+  if (input.createdBy) {
+    metadata.created_by = input.createdBy;
+  }
+
   const { data: authData, error: authError } =
     await admin.auth.admin.createUser({
       email: internalEmail,
       password,
       email_confirm: true,
-      user_metadata: {
-        name,
-        role: input.role,
-        username,
-      },
+      user_metadata: metadata,
     });
 
   if (authError) {
+    const msg = authError.message.toLowerCase();
+    if (msg.includes("already") || msg.includes("registered")) {
+      return {
+        ok: false,
+        message: "이미 등록된 로그인 정보입니다.",
+        status: 409,
+      };
+    }
     return { ok: false, message: authError.message, status: 400 };
   }
 
@@ -120,27 +142,60 @@ export async function createManagedAccount(
     return { ok: false, message: "계정 생성에 실패했습니다.", status: 400 };
   }
 
-  const { data: profile, error: profileError } = await admin
-    .from("profiles")
-    .upsert({
-      id: authData.user.id,
-      name,
-      email: internalEmail,
-      role: input.role,
-      username,
-      is_active: true,
-      created_by: input.createdBy ?? null,
-    })
-    .select(PROFILE_SELECT)
-    .single();
+  const userId = authData.user.id;
+  const profilePayload = {
+    name,
+    email: internalEmail,
+    role: input.role,
+    username,
+    is_active: true,
+    created_by: input.createdBy ?? null,
+  };
 
-  if (profileError) {
+  // on_auth_user_created 트리거가 먼저 profiles 행을 만듦 → upsert 대신 update 후 없으면 insert
+  const { data: updatedRows, error: updateError } = await admin
+    .from("profiles")
+    .update(profilePayload)
+    .eq("id", userId)
+    .select(PROFILE_SELECT);
+
+  if (updateError) {
     try {
-      await admin.auth.admin.deleteUser(authData.user.id);
+      await admin.auth.admin.deleteUser(userId);
     } catch (rollbackError) {
       console.error("[createManagedAccount] rollback failed:", rollbackError);
     }
-    return { ok: false, message: profileError.message, status: 500 };
+    return { ok: false, message: updateError.message, status: 500 };
+  }
+
+  let profile = updatedRows?.[0] ?? null;
+
+  if (!profile) {
+    const { data: inserted, error: insertError } = await admin
+      .from("profiles")
+      .insert({ id: userId, ...profilePayload })
+      .select(PROFILE_SELECT)
+      .single();
+
+    if (insertError) {
+      try {
+        await admin.auth.admin.deleteUser(userId);
+      } catch (rollbackError) {
+        console.error("[createManagedAccount] rollback failed:", rollbackError);
+      }
+      const hint =
+        insertError.message.includes("created_by") ||
+        insertError.message.includes("username") ||
+        insertError.message.includes("is_active")
+          ? " DB 마이그레이션(004~005)이 적용됐는지 Supabase SQL Editor에서 확인해 주세요."
+          : "";
+      return {
+        ok: false,
+        message: insertError.message + hint,
+        status: 500,
+      };
+    }
+    profile = inserted;
   }
 
   if (!profile) {
@@ -149,6 +204,20 @@ export async function createManagedAccount(
       message: "프로필 저장 후 데이터를 불러오지 못했습니다.",
       status: 500,
     };
+  }
+
+  if (profile.role !== input.role) {
+    const { data: fixed, error: roleFixError } = await admin
+      .from("profiles")
+      .update({ role: input.role })
+      .eq("id", userId)
+      .select(PROFILE_SELECT)
+      .single();
+
+    if (roleFixError) {
+      return { ok: false, message: roleFixError.message, status: 500 };
+    }
+    if (fixed) profile = fixed;
   }
 
   return {
