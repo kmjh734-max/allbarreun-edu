@@ -92,7 +92,8 @@ export function StudentLessonWatch({
 
   const [iframeEl, setIframeEl] = useState<HTMLIFrameElement | null>(null);
   const [ytContainerEl, setYtContainerEl] = useState<HTMLDivElement | null>(null);
-  const [ytUsePlainIframe, setYtUsePlainIframe] = useState(false);
+  /** 일부 공개·임베드 제한 영상: iframe 직접 재생이 API보다 안정적 */
+  const [ytUsePlainIframe, setYtUsePlainIframe] = useState(true);
   const [ytEmbedBlocked, setYtEmbedBlocked] = useState(false);
   const playerRef = useRef<PlayerHandle | null>(null);
   const completionSentRef = useRef(initialIsCompleted);
@@ -119,7 +120,7 @@ export function StudentLessonWatch({
   const [playerReady, setPlayerReady] = useState(false);
 
   useEffect(() => {
-    setYtUsePlainIframe(false);
+    setYtUsePlainIframe(true);
     setYtEmbedBlocked(false);
     setPlayerReady(false);
   }, [lessonId, resolved?.videoId, resolved?.provider]);
@@ -705,6 +706,7 @@ export function StudentLessonWatch({
               className="absolute inset-0 h-full w-full border-0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
+              onLoad={() => setPlayerReady(true)}
             />
           ) : (
             <div
@@ -716,9 +718,31 @@ export function StudentLessonWatch({
         </div>
       </div>
 
+      {!isVimeo && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p>
+            YouTube 「일부 공개」 영상은 학습 화면에 재생되지 않을 수 있습니다.
+            (업로더가 퍼가기를 막았거나 YouTube 정책 때문)
+          </p>
+          <p className="mt-2">
+            <strong>해결:</strong> 영상을 「공개」로 바꾸거나, 아래 링크로 YouTube에서
+            시청해 주세요.
+          </p>
+          <a
+            href={youtubeUrl?.trim() || youtubeWatchUrl(resolved.videoId)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-flex rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+          >
+            YouTube에서 이 영상 보기
+          </a>
+        </div>
+      )}
+
       {!playerReady && (
         <p className="text-xs text-slate-500">
-          영상을 불러오는 중입니다. 재생이 되지 않으면 새로고침해 주세요.
+          영상을 불러오는 중입니다. 재생이 되지 않으면 위 「YouTube에서 이 영상 보기」를
+          이용해 주세요.
         </p>
       )}
 

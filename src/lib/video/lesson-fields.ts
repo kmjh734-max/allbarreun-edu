@@ -1,6 +1,7 @@
 import {
   extractVimeoVideoId,
   extractYouTubeVideoId,
+  normalizeVideoInputUrl,
   parseVideoLink,
   type VideoProvider,
 } from "@/lib/video/parse-url";
@@ -34,19 +35,21 @@ export function lessonVideoFieldsFromUrl(
   const parsed = parseVideoLink(trimmed);
   if (!parsed) return null;
 
+  const normalized = normalizeVideoInputUrl(trimmed);
+
   if (parsed.provider === "youtube") {
     return {
       video_provider: "youtube",
       vimeo_url: null,
       vimeo_video_id: null,
-      youtube_url: trimmed,
+      youtube_url: normalized,
       youtube_video_id: parsed.videoId,
     };
   }
 
   return {
     video_provider: "vimeo",
-    vimeo_url: trimmed,
+    vimeo_url: normalized,
     vimeo_video_id: parsed.videoId,
     youtube_url: null,
     youtube_video_id: null,

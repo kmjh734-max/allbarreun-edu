@@ -93,6 +93,17 @@ export function extractYouTubeVideoId(url: string): string | null {
   return null;
 }
 
+/** 저장·표시용: si= 등 추적 파라미터 제거, YouTube는 watch?v= 형식으로 통일 */
+export function normalizeVideoInputUrl(url: string): string {
+  const trimmed = url.trim();
+  const parsed = parseVideoLink(trimmed);
+  if (!parsed) return trimmed;
+  if (parsed.provider === "youtube") {
+    return `https://www.youtube.com/watch?v=${parsed.videoId}`;
+  }
+  return trimmed;
+}
+
 export function parseVideoLink(url: string): ParsedVideoLink | null {
   const trimmed = url.trim();
   if (!trimmed) return null;
@@ -131,7 +142,7 @@ export function buildYouTubeEmbedUrl(
   if (start > 0) {
     params.set("start", String(start));
   }
-  return `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
+  return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
 }
 
 export function buildVimeoEmbedUrl(
@@ -156,4 +167,4 @@ export const VIDEO_LINK_PLACEHOLDER =
   "https://www.youtube.com/watch?v=... 또는 https://vimeo.com/123456789";
 
 export const VIDEO_LINK_HELP =
-  "YouTube 또는 Vimeo에 업로드한 영상의 공유 링크를 붙여 넣어 주세요.";
+  "YouTube·Vimeo 공유 링크를 붙여 넣어 주세요. YouTube는 「공개」가 가장 안정적입니다. 「일부 공개」는 LMS에 안 뜰 수 있어, 그때는 YouTube에서 직접 시청하거나 영상을 공개로 바꿔 주세요.";

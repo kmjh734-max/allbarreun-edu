@@ -4,7 +4,10 @@ import {
   createEmptyVideoRow,
   type VideoDraftRow,
 } from "@/lib/courses/course-lessons";
-import { VIDEO_LINK_PLACEHOLDER } from "@/lib/video/parse-url";
+import {
+  VIDEO_LINK_HELP,
+  VIDEO_LINK_PLACEHOLDER,
+} from "@/lib/video/parse-url";
 
 interface VideoListEditorProps {
   rows: VideoDraftRow[];
@@ -85,6 +88,7 @@ export function VideoListEditor({
                     placeholder={VIDEO_LINK_PLACEHOLDER}
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                   />
+                  <p className="mt-1 text-xs text-slate-500">{VIDEO_LINK_HELP}</p>
                 </div>
               </div>
               <button
