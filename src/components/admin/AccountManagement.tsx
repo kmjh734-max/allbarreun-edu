@@ -361,7 +361,11 @@ export function AccountManagement({
       )}
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full min-w-[880px] text-left text-sm">
+        <table
+          className={`w-full text-left text-sm ${
+            allowDelete ? "min-w-[1040px]" : "min-w-[880px]"
+          }`}
+        >
           <thead className="border-b bg-slate-50">
             <tr>
               <th className="px-4 py-3 font-medium">이름</th>
@@ -457,7 +461,7 @@ export function AccountManagement({
                         {user.is_active ? "활성" : "비활성"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 align-top">
+                    <td className="min-w-[240px] px-4 py-3 align-top">
                       <div className="flex flex-wrap gap-2">
                         {isEditing ? (
                           <>
@@ -486,6 +490,16 @@ export function AccountManagement({
                             >
                               수정
                             </button>
+                            {allowDelete && (
+                              <button
+                                type="button"
+                                disabled={loading}
+                                onClick={() => handleDelete(user)}
+                                className="rounded-lg border border-red-400 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50"
+                              >
+                                삭제
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => {
@@ -509,16 +523,6 @@ export function AccountManagement({
                             >
                               {user.is_active ? "비활성화" : "활성화"}
                             </button>
-                            {allowDelete && (
-                              <button
-                                type="button"
-                                disabled={loading}
-                                onClick={() => handleDelete(user)}
-                                className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-                              >
-                                삭제
-                              </button>
-                            )}
                           </>
                         )}
                       </div>
