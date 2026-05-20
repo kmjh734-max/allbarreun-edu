@@ -41,6 +41,123 @@ type Result<T> =
   | { ok: true; message: string; profile: T }
   | { ok: false; message: string; status: number };
 
+async function syncProfileAfterAuthCreate(
+  admin: SupabaseClient,
+  userId: string,
+  payload: {
+    name: string;
+    email: string;
+    role: ManagedAccountRole;
+    username: string;
+    createdBy: string | null;
+  }
+): Promise<Result<Record<string, unknown>>> {
+  const fullPayload = {
+    name: payload.name,
+    email: payload.email,
+    role: payload.role,
+    username: payload.username,
+    is_active: true,
+    created_by: payload.createdBy,
+  };
+
+  const tryUpdate = async (body: typeof fullPayload) => {
+    return admin
+      .from("profiles")
+      .update(body)
+      .eq("id", userId)
+      .select(PROFILE_SELECT);
+  };
+
+  let { data: rows, error: updateError } = await tryUpdate(fullPayload);
+
+  if (
+    updateError &&
+    (updateError.message.includes("created_by") ||
+      updateError.message.includes("foreign key"))
+  ) {
+    const retry = await tryUpdate({ ...fullPayload, created_by: null });
+    rows = retry.data;
+    updateError = retry.error;
+  }
+
+  if (updateError) {
+    const hint =
+      updateError.message.includes("username") ||
+      updateError.message.includes("is_active")
+        ? " Supabase에서 마이그레이션 004_student_username.sql 을 실행해 주세요."
+        : "";
+    return {
+      ok: false,
+      message: updateError.message + hint,
+      status: 500,
+    };
+  }
+
+  let profile = rows?.[0] ?? null;
+
+  if (!profile) {
+    const { data: inserted, error: insertError } = await admin
+      .from("profiles")
+      .insert({ id: userId, ...fullPayload })
+      .select(PROFILE_SELECT)
+      .single();
+
+    if (insertError) {
+      if (
+        insertError.message.includes("username") &&
+        insertError.message.includes("unique")
+      ) {
+        return {
+          ok: false,
+          message: "이미 사용 중인 아이디입니다.",
+          status: 409,
+        };
+      }
+      const hint =
+        insertError.message.includes("username") ||
+        insertError.message.includes("is_active") ||
+        insertError.message.includes("created_by")
+          ? " Supabase SQL Editor에서 004~005, 010 마이그레이션을 실행해 주세요."
+          : "";
+      return {
+        ok: false,
+        message: insertError.message + hint,
+        status: 500,
+      };
+    }
+    profile = inserted;
+  }
+
+  if (!profile) {
+    return {
+      ok: false,
+      message: "프로필 저장 후 데이터를 불러오지 못했습니다.",
+      status: 500,
+    };
+  }
+
+  if (profile.role !== payload.role) {
+    const { data: fixed, error: roleFixError } = await admin
+      .from("profiles")
+      .update({ role: payload.role })
+      .eq("id", userId)
+      .select(PROFILE_SELECT)
+      .single();
+
+    if (roleFixError) {
+      return { ok: false, message: roleFixError.message, status: 500 };
+    }
+    if (fixed) profile = fixed;
+  }
+
+  return {
+    ok: true,
+    message: "",
+    profile: profile as Record<string, unknown>,
+  };
+}
+
 export async function createManagedAccount(
   admin: SupabaseClient,
   input: CreateAccountInput
@@ -109,21 +226,15 @@ export async function createManagedAccount(
     };
   }
 
-  const metadata: Record<string, string> = {
-    name,
-    role: input.role,
-    username,
-  };
-  if (input.createdBy) {
-    metadata.created_by = input.createdBy;
-  }
-
   const { data: authData, error: authError } =
     await admin.auth.admin.createUser({
       email: internalEmail,
       password,
       email_confirm: true,
-      user_metadata: metadata,
+      user_metadata: {
+        name,
+        role: input.role,
+      },
     });
 
   if (authError) {
@@ -135,6 +246,14 @@ export async function createManagedAccount(
         status: 409,
       };
     }
+    if (msg.includes("database error")) {
+      return {
+        ok: false,
+        message:
+          "계정 생성 중 DB 오류가 발생했습니다. Supabase SQL Editor에서 마이그레이션 010_fix_handle_new_user_safe.sql 을 실행한 뒤, Authentication → Logs에서 상세 오류를 확인해 주세요. (아이디 중복·마이그레이션 미적용 가능)",
+        status: 400,
+      };
+    }
     return { ok: false, message: authError.message, status: 400 };
   }
 
@@ -143,82 +262,25 @@ export async function createManagedAccount(
   }
 
   const userId = authData.user.id;
-  const profilePayload = {
+
+  const syncResult = await syncProfileAfterAuthCreate(admin, userId, {
     name,
     email: internalEmail,
     role: input.role,
     username,
-    is_active: true,
-    created_by: input.createdBy ?? null,
-  };
+    createdBy: input.role === "student" ? input.createdBy ?? null : null,
+  });
 
-  // on_auth_user_created 트리거가 먼저 profiles 행을 만듦 → upsert 대신 update 후 없으면 insert
-  const { data: updatedRows, error: updateError } = await admin
-    .from("profiles")
-    .update(profilePayload)
-    .eq("id", userId)
-    .select(PROFILE_SELECT);
-
-  if (updateError) {
+  if (!syncResult.ok) {
     try {
       await admin.auth.admin.deleteUser(userId);
     } catch (rollbackError) {
       console.error("[createManagedAccount] rollback failed:", rollbackError);
     }
-    return { ok: false, message: updateError.message, status: 500 };
+    return syncResult;
   }
 
-  let profile = updatedRows?.[0] ?? null;
-
-  if (!profile) {
-    const { data: inserted, error: insertError } = await admin
-      .from("profiles")
-      .insert({ id: userId, ...profilePayload })
-      .select(PROFILE_SELECT)
-      .single();
-
-    if (insertError) {
-      try {
-        await admin.auth.admin.deleteUser(userId);
-      } catch (rollbackError) {
-        console.error("[createManagedAccount] rollback failed:", rollbackError);
-      }
-      const hint =
-        insertError.message.includes("created_by") ||
-        insertError.message.includes("username") ||
-        insertError.message.includes("is_active")
-          ? " DB 마이그레이션(004~005)이 적용됐는지 Supabase SQL Editor에서 확인해 주세요."
-          : "";
-      return {
-        ok: false,
-        message: insertError.message + hint,
-        status: 500,
-      };
-    }
-    profile = inserted;
-  }
-
-  if (!profile) {
-    return {
-      ok: false,
-      message: "프로필 저장 후 데이터를 불러오지 못했습니다.",
-      status: 500,
-    };
-  }
-
-  if (profile.role !== input.role) {
-    const { data: fixed, error: roleFixError } = await admin
-      .from("profiles")
-      .update({ role: input.role })
-      .eq("id", userId)
-      .select(PROFILE_SELECT)
-      .single();
-
-    if (roleFixError) {
-      return { ok: false, message: roleFixError.message, status: 500 };
-    }
-    if (fixed) profile = fixed;
-  }
+  const profile = syncResult.profile;
 
   return {
     ok: true,
