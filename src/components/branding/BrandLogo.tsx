@@ -36,7 +36,7 @@ export function BrandLogo({
     <div className={`${styles.wrap} ${className}`.trim()}>
       <Image
         src={LOGO_SRC}
-        alt=""
+        alt={SITE_NAME}
         width={200}
         height={56}
         priority={variant === "login"}

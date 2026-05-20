@@ -1,6 +1,6 @@
-# English Academy LMS (MVP)
+# 이룸학원 LMS (MVP)
 
-영어학원 전용 LMS MVP입니다. 강사는 Vimeo에 직접 영상을 업로드한 뒤 **링크만 입력**합니다 (Vimeo API 업로드 없음).
+이룸학원 전용 LMS입니다. 강사는 Vimeo에 직접 영상을 업로드한 뒤 **링크만 입력**합니다 (Vimeo API 업로드 없음).
 
 ## 기술 스택
 
