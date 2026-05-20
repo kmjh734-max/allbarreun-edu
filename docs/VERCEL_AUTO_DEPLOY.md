@@ -28,6 +28,24 @@ Supabase → **Authentication** → URL Configuration에
 
 ---
 
+## Queue에 배포가 쌓일 때 (자주 발생)
+
+**증상:** Vercel Deployments에 `Queued`만 여러 개 쌓이고 프로덕션이 안 바뀜.
+
+**원인:** `main` 푸시마다 **Vercel Git 자동 배포**와 **GitHub Actions Deploy Hook**이 **둘 다** 돌아가면, 무료 플랜에서 빌드 대기열이 꽉 찹니다.
+
+**해결:**
+
+1. [Vercel Deployments](https://vercel.com/dashboard) → **jeongsu-lms** → `Queued` / `Canceled` 가능한 오래된 배포는 **Cancel** (최신 1개만 남기기)
+2. **둘 중 하나만** 사용
+   - **추천:** Vercel Git 연동만 (Actions 워크플로는 `workflow_dispatch` 수동만)
+   - 또는 Git 연동 끄고 Deploy Hook + Actions만
+3. 최신 커밋으로 **Redeploy** 한 번 (Deployments → ⋯ → Redeploy)
+
+이 저장소는 Actions가 `push`마다 훅을 호출하지 않도록 수정되어 있습니다. (`workflow_dispatch`만)
+
+---
+
 ## 방법 B: GitHub Actions + Deploy Hook (A가 안 될 때)
 
 1. Vercel → 프로젝트 → **Settings** → **Git** → **Deploy Hooks**
