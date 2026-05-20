@@ -38,12 +38,13 @@ async function selectProfileAfterWrite(
   return admin.from("profiles").select(PROFILE_SELECT_BASE).eq("id", userId);
 }
 
-const ROLE_LABEL: Record<"student" | "teacher", string> = {
+const ROLE_LABEL: Record<"student" | "teacher" | "admin", string> = {
   student: "학생",
   teacher: "강사",
+  admin: "관리자",
 };
 
-export type ManagedAccountRole = Extract<UserRole, "student" | "teacher">;
+export type ManagedAccountRole = Extract<UserRole, "student" | "teacher" | "admin">;
 
 export interface CreateAccountInput {
   name: string;

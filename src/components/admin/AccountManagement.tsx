@@ -159,10 +159,14 @@ export function AccountManagement({
       roleLabel === "학생"
         ? "\n학생 계정과 수강·학습 기록이 함께 삭제됩니다."
         : "";
+    const adminNote =
+      roleLabel === "관리자"
+        ? "\n마지막 남은 관리자 계정은 삭제할 수 없습니다."
+        : "";
 
     if (
       !window.confirm(
-        `「${user.name}」 ${roleLabel} 계정을 완전히 삭제할까요?\n삭제 후에는 되돌릴 수 없습니다.${courseNote}${studentNote}`
+        `「${user.name}」 ${roleLabel} 계정을 완전히 삭제할까요?\n삭제 후에는 되돌릴 수 없습니다.${courseNote}${studentNote}${adminNote}`
       )
     ) {
       return;
