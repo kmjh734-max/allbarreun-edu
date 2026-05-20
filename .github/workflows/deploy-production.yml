@@ -1,0 +1,31 @@
+# main 브랜치 푸시 시 Vercel 프로덕션 재배포
+# 1회 설정: GitHub 저장소 Secrets에 VERCEL_DEPLOY_HOOK 추가
+#   (Vercel → Project → Settings → Git → Deploy Hooks → main 브랜치 훅 URL)
+
+name: Deploy to Vercel (Production)
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: vercel-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Vercel production deploy
+        env:
+          DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$DEPLOY_HOOK" ]; then
+            echo "::warning::VERCEL_DEPLOY_HOOK secret이 없습니다."
+            echo "Vercel 대시보드에서 Deploy Hook URL을 만들고 GitHub Secrets에 등록하세요."
+            echo "또는 Vercel 프로젝트 Settings → Git에서 GitHub 저장소를 연결하면 푸시만으로 자동 배포됩니다."
+            exit 0
+          fi
+          curl -fsSL -X POST "$DEPLOY_HOOK"
+          echo "Vercel 배포가 시작되었습니다."

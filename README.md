@@ -112,12 +112,18 @@ npm install
 npm run dev
 ```
 
-## Vercel 배포
+## Vercel 배포 (자동)
 
-1. GitHub에 푸시
-2. Vercel에서 Import
-3. Environment Variables에 Supabase URL/Anon Key 설정
-4. Supabase → Authentication → URL Configuration에 Vercel 도메인 추가
+`main` 브랜치에 푸시하면 프로덕션에 자동 배포되도록 설정합니다.
+
+**한 번만 설정:** [docs/VERCEL_AUTO_DEPLOY.md](docs/VERCEL_AUTO_DEPLOY.md) 참고
+
+1. Vercel에서 GitHub 저장소 `kmjh734-max/jeongsu-lms` 연결 (Production Branch: `main`)
+2. Environment Variables: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+3. Supabase Auth URL에 `https://jeongsu-lms.vercel.app` 추가
+4. 이후 `git push origin main` → Vercel Deployments에 새 빌드 표시
+
+(대안) GitHub Actions Deploy Hook: `.github/workflows/deploy-production.yml` + Secret `VERCEL_DEPLOY_HOOK`
 
 ## MVP 기능 체크리스트
 
