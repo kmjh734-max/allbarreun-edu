@@ -6,8 +6,8 @@ type BrandLogoVariant = "login" | "header";
 interface BrandLogoProps {
   variant?: BrandLogoVariant;
   showSiteName?: boolean;
-  /** 어두운 배경: 흰 카드 안에 컬러 로고 표시 */
-  onDark?: boolean;
+  /** 로그인 히어로 등 큰 로고 */
+  large?: boolean;
   className?: string;
 }
 
@@ -17,7 +17,7 @@ const variantStyles: Record<
 > = {
   login: {
     wrap: "flex flex-col items-center gap-2",
-    image: "h-12 w-auto max-w-[200px]",
+    image: "h-12 w-auto max-w-[220px]",
     name: "text-lg font-semibold text-brand-900",
   },
   header: {
@@ -30,46 +30,42 @@ const variantStyles: Record<
 export function BrandLogo({
   variant = "header",
   showSiteName = true,
-  onDark = false,
+  large = false,
   className = "",
 }: BrandLogoProps) {
   const styles = variantStyles[variant];
+  const imageClass = large
+    ? "h-20 w-auto max-w-[320px] sm:h-24"
+    : styles.image;
 
-  const content = (
-    <>
-      <Image
-        src={LOGO_SRC}
-        alt={SITE_NAME}
-        width={200}
-        height={56}
-        priority={variant === "login"}
-        unoptimized={variant === "login"}
-        className={`object-contain object-left ${styles.image}`}
-        sizes="200px"
-      />
-      {showSiteName && (
-        <span
-          className={
-            onDark ? "text-lg font-semibold text-brand-900" : styles.name
-          }
-        >
-          {SITE_NAME}
-        </span>
-      )}
-    </>
+  const image = (
+    <Image
+      src={LOGO_SRC}
+      alt={SITE_NAME}
+      width={320}
+      height={90}
+      priority={variant === "login"}
+      unoptimized={variant === "login"}
+      className={`object-contain object-center ${imageClass}`}
+      sizes="(max-width: 320px) 80vw, 320px"
+    />
   );
 
-  if (onDark) {
-    return (
-      <div
-        className={`inline-flex rounded-xl bg-white px-4 py-3 shadow-[0_8px_24px_rgb(0_0_0/0.25)] ${className}`.trim()}
-      >
-        <div className={styles.wrap}>{content}</div>
+  const logoImage =
+    variant === "login" ? (
+      <div className="rounded-xl bg-white px-5 py-4 shadow-[0_4px_20px_rgb(0_0_0/0.12)]">
+        {image}
       </div>
+    ) : (
+      image
     );
-  }
 
   return (
-    <div className={`${styles.wrap} ${className}`.trim()}>{content}</div>
+    <div className={`${styles.wrap} ${className}`.trim()}>
+      {logoImage}
+      {showSiteName && (
+        <span className={styles.name}>{SITE_NAME}</span>
+      )}
+    </div>
   );
 }
