@@ -1,5 +1,7 @@
 import type { Config } from "tailwindcss";
+import { academyConfig } from "./src/config/academy";
 
+/** brand 색상 — academyConfig.primaryColor(#E30613) 기준 red 계열 */
 const config: Config = {
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
@@ -10,14 +12,14 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          50: "#f0f4f8",
-          100: "#dce6f0",
-          200: "#b8cde1",
-          500: "#2f5f8f",
-          600: "#1e4976",
-          700: "#173a5e",
-          800: "#122d4a",
-          900: "#0c2035",
+          50: "#fef2f2",
+          100: "#fee2e2",
+          200: "#fecaca",
+          500: "#f87171",
+          600: academyConfig.primaryColor,
+          700: "#b8050f",
+          800: "#8a040c",
+          900: "#5c0308",
         },
       },
       boxShadow: {

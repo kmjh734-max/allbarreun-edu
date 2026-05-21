@@ -125,7 +125,7 @@ export function parseVideoLink(url: string): ParsedVideoLink | null {
   return null;
 }
 
-/** 학생 시청: enablejsapi + origin 으로 IFrame API와 같은 iframe 공유 */
+/** YouTube 임베드 URL (기본: 단순 재생) */
 export function buildYouTubeEmbedUrl(
   videoId: string,
   startSeconds?: number,

@@ -3,21 +3,24 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { parseAdminApiResponse } from "@/lib/admin/parse-api-response-client";
-import { SearchableSelect } from "@/components/ui/SearchableSelect";
-import type { Course, Profile } from "@/types/database";
+import { SearchableTreePicker } from "@/components/ui/SearchableTreePicker";
+import type { TreeNode } from "@/lib/ui/tree-types";
+import type { Profile } from "@/types/database";
 
 interface TeacherEnrollmentFormProps {
   students: Profile[];
-  courses: Course[];
+  studentTree: TreeNode[];
+  courseTree: TreeNode[];
 }
 
 export function TeacherEnrollmentForm({
   students,
-  courses,
+  studentTree,
+  courseTree,
 }: TeacherEnrollmentFormProps) {
   const router = useRouter();
-  const [studentId, setStudentId] = useState(students[0]?.id ?? "");
-  const [courseId, setCourseId] = useState(courses[0]?.id ?? "");
+  const [studentId, setStudentId] = useState("");
+  const [courseId, setCourseId] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -67,7 +70,7 @@ export function TeacherEnrollmentForm({
     );
   }
 
-  if (courses.length === 0) {
+  if (courseTree.length === 0) {
     return (
       <p className="text-sm text-amber-700">
         담당 강좌이 없습니다. 관리자에게 강좌 배정을 요청해 주세요.
@@ -84,30 +87,23 @@ export function TeacherEnrollmentForm({
       <p className="text-sm text-slate-600">
         본인이 등록한 학생을 담당 강좌에 배정합니다.
       </p>
-      <SearchableSelect
+      <SearchableTreePicker
         label="학생"
         required
+        tree={studentTree}
         value={studentId}
         onChange={setStudentId}
-        emptyOptionLabel={activeStudents[0] ? "선택" : "학생 없음"}
-        searchPlaceholder="학생 이름·아이디 검색"
-        options={activeStudents.map((s) => ({
-          value: s.id,
-          label: `${s.name} (${s.username ?? "—"})`,
-          searchText: [s.username, s.name].join(" "),
-        }))}
+        searchPlaceholder="학생·반 이름 검색"
+        emptyLabel="학생 선택"
       />
-      <SearchableSelect
+      <SearchableTreePicker
         label="강좌"
         required
+        tree={courseTree}
         value={courseId}
         onChange={setCourseId}
         searchPlaceholder="강좌 제목 검색"
-        options={courses.map((c) => ({
-          value: c.id,
-          label: c.title,
-          searchText: c.title,
-        }))}
+        emptyLabel="강좌 선택"
       />
       {message && (
         <p

@@ -125,7 +125,7 @@ export function LoginForm({ initialError }: LoginFormProps) {
         type="submit"
         variant="primary"
         disabled={loading}
-        className="w-full"
+        className="w-full py-2.5 text-[15px] font-semibold"
       >
         {loading ? "로그인 중..." : "로그인"}
       </Button>

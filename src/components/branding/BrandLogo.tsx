@@ -6,6 +6,8 @@ type BrandLogoVariant = "login" | "header";
 interface BrandLogoProps {
   variant?: BrandLogoVariant;
   showSiteName?: boolean;
+  /** 어두운 배경: 흰 카드 안에 컬러 로고 표시 */
+  onDark?: boolean;
   className?: string;
 }
 
@@ -28,24 +30,46 @@ const variantStyles: Record<
 export function BrandLogo({
   variant = "header",
   showSiteName = true,
+  onDark = false,
   className = "",
 }: BrandLogoProps) {
   const styles = variantStyles[variant];
 
-  return (
-    <div className={`${styles.wrap} ${className}`.trim()}>
+  const content = (
+    <>
       <Image
         src={LOGO_SRC}
         alt={SITE_NAME}
         width={200}
         height={56}
         priority={variant === "login"}
+        unoptimized={variant === "login"}
         className={`object-contain object-left ${styles.image}`}
-        sizes="140px"
+        sizes="200px"
       />
       {showSiteName && (
-        <span className={styles.name}>{SITE_NAME}</span>
+        <span
+          className={
+            onDark ? "text-lg font-semibold text-brand-900" : styles.name
+          }
+        >
+          {SITE_NAME}
+        </span>
       )}
-    </div>
+    </>
+  );
+
+  if (onDark) {
+    return (
+      <div
+        className={`inline-flex rounded-xl bg-white px-4 py-3 shadow-[0_8px_24px_rgb(0_0_0/0.25)] ${className}`.trim()}
+      >
+        <div className={styles.wrap}>{content}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`${styles.wrap} ${className}`.trim()}>{content}</div>
   );
 }

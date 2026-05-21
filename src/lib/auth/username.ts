@@ -1,4 +1,4 @@
-export const STUDENT_EMAIL_DOMAIN = "jslms.local";
+import { academyConfig } from "@/config/academy";
 
 const USERNAME_PATTERN = /^[a-z0-9]{3,32}$/;
 
@@ -12,12 +12,12 @@ export function isValidUsername(username: string): boolean {
 }
 
 export function toInternalEmail(username: string): string {
-  return `${normalizeUsername(username)}@${STUDENT_EMAIL_DOMAIN}`;
+  return `${normalizeUsername(username)}@${academyConfig.internalEmailDomain}`;
 }
 
 /**
  * 로그인 식별자 → Supabase Auth 이메일
- * @ 포함 시 그대로(관리자·강사), 없으면 학생 아이디 → @jslms.local
+ * @ 포함 시 그대로(관리자·강사), 없으면 학생 아이디 → @{internalEmailDomain}
  */
 export function resolveLoginEmail(identifier: string): string {
   const trimmed = identifier.trim();

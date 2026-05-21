@@ -2,12 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { buildVimeoEmbedUrl, buildYouTubeEmbedUrl } from "@/lib/video/parse-url";
-import {
-  createYouTubeIframeBridge,
-  YT_STATE,
-} from "@/lib/video/youtube-iframe-bridge";
-import { youtubeWatchUrl } from "@/lib/video/youtube-embed-fallback";
+import { YouTubeLessonWatch } from "@/components/lessons/YouTubeLessonWatch";
+import { buildVimeoEmbedUrl } from "@/lib/video/parse-url";
 import { resolveLessonVideo } from "@/lib/video/lesson-fields";
 import { shouldPersistProgress } from "@/lib/lesson-progress/save-throttle";
 import {
@@ -63,12 +59,7 @@ async function postLessonProgress(payload: {
   }
 }
 
-type PlayerHandle =
-  | { kind: "vimeo"; player: import("@vimeo/player").default }
-  | {
-      kind: "youtube";
-      bridge: ReturnType<typeof createYouTubeIframeBridge>;
-    };
+type PlayerHandle = { kind: "vimeo"; player: import("@vimeo/player").default };
 
 export function StudentLessonWatch({
   lessonId,
@@ -93,9 +84,6 @@ export function StudentLessonWatch({
   });
 
   const [iframeEl, setIframeEl] = useState<HTMLIFrameElement | null>(null);
-  const [ytIframeEl, setYtIframeEl] = useState<HTMLIFrameElement | null>(null);
-  const [ytIframeLoaded, setYtIframeLoaded] = useState(false);
-  const [ytEmbedBlocked, setYtEmbedBlocked] = useState(false);
   const playerRef = useRef<PlayerHandle | null>(null);
   const completionSentRef = useRef(initialIsCompleted);
   const maxWatchedSecondsRef = useRef(Math.max(0, initialWatchedSeconds));
@@ -121,8 +109,6 @@ export function StudentLessonWatch({
   const [playerReady, setPlayerReady] = useState(false);
 
   useEffect(() => {
-    setYtEmbedBlocked(false);
-    setYtIframeLoaded(false);
     setPlayerReady(false);
     setSaveError(null);
   }, [lessonId, resolved?.videoId, resolved?.provider]);
@@ -196,11 +182,7 @@ export function StudentLessonWatch({
     const handle = playerRef.current;
     if (!handle) return;
     try {
-      if (handle.kind === "vimeo") {
-        await handle.player.setCurrentTime(seconds);
-      } else {
-        handle.bridge.seekTo(seconds);
-      }
+      await handle.player.setCurrentTime(seconds);
     } catch {
       /* ignore */
     }
@@ -213,14 +195,11 @@ export function StudentLessonWatch({
     const handle = playerRef.current;
     if (!handle) return null;
     try {
-      if (handle.kind === "vimeo") {
-        const [seconds, duration] = await Promise.all([
-          handle.player.getCurrentTime(),
-          handle.player.getDuration(),
-        ]);
-        return { seconds, duration };
-      }
-      return null;
+      const [seconds, duration] = await Promise.all([
+        handle.player.getCurrentTime(),
+        handle.player.getDuration(),
+      ]);
+      return { seconds, duration };
     } catch {
       return null;
     }
@@ -289,11 +268,11 @@ export function StudentLessonWatch({
   syncFromPlayheadRef.current = syncFromPlayhead;
 
   useEffect(() => {
-    if (!resolved) return;
+    if (!resolved || resolved.provider !== "vimeo") return;
 
     let disposed = false;
 
-    if (resolved.provider === "vimeo") {
+    {
       if (!iframeEl) return;
 
       type VimeoPlayer = import("@vimeo/player").default;
@@ -419,90 +398,10 @@ export function StudentLessonWatch({
       };
     }
 
-    if (resolved.provider !== "youtube") return;
-    if (!ytIframeEl || !ytIframeLoaded) return;
-
-    let lastYtSeconds = 0;
-    let pendingResumeSeek = maxWatchedSecondsRef.current > 0;
-
-    const bridge = createYouTubeIframeBridge(ytIframeEl, (info) => {
-      if (disposed || completionSentRef.current) return;
-
-      const { currentTime: seconds, duration, playerState } = info;
-      if (duration <= 0) return;
-
-      if (
-        pendingResumeSeek &&
-        (playerState === YT_STATE.PLAYING || playerState === YT_STATE.BUFFERING)
-      ) {
-        const resumeTo = maxWatchedSecondsRef.current;
-        if (resumeTo > 0) {
-          const seekTo = Math.max(0, resumeTo - 1);
-          bridge.seekTo(seekTo);
-          lastTickSecondsRef.current = seekTo;
-          lastYtSeconds = seekTo;
-          resumeGraceUntilRef.current = Date.now() + 4000;
-        }
-        pendingResumeSeek = false;
-      }
-
-      if (playerState === YT_STATE.ENDED) {
-        maxWatchedSecondsRef.current = Math.max(
-          maxWatchedSecondsRef.current,
-          duration
-        );
-        void (async () => {
-          if (isCompletionReached(maxWatchedSecondsRef.current, duration)) {
-            await handleCompleteRef.current(
-              maxWatchedSecondsRef.current,
-              duration
-            );
-          } else {
-            await syncFromPlayheadRef.current(
-              maxWatchedSecondsRef.current,
-              duration,
-              true
-            );
-          }
-        })();
-        return;
-      }
-
-      if (
-        playerState === YT_STATE.PLAYING ||
-        playerState === YT_STATE.PAUSED
-      ) {
-        const forceSave = playerState === YT_STATE.PAUSED;
-        if (
-          playerState === YT_STATE.PLAYING &&
-          isForwardSeekBeyondMax(seconds, maxWatchedSecondsRef.current) &&
-          seconds - lastYtSeconds > 2
-        ) {
-          const max = maxWatchedSecondsRef.current;
-          bridge.seekTo(max);
-          lastTickSecondsRef.current = max;
-          setSeekNotice("앞으로 건너뛸 수 없습니다. 이어서 시청해 주세요.");
-          return;
-        }
-        lastYtSeconds = seconds;
-        void syncFromPlayheadRef.current(seconds, duration, forceSave);
-      }
-    });
-
-    playerRef.current = { kind: "youtube", bridge };
-    bridge.start();
-    setPlayerReady(true);
-
-    return () => {
-      disposed = true;
-      setPlayerReady(false);
-      bridge.destroy();
-      playerRef.current = null;
-    };
-  }, [resolved, iframeEl, ytIframeEl, ytIframeLoaded, resumeSeconds]);
+  }, [resolved, iframeEl, resumeSeconds, getPlaybackState]);
 
   useEffect(() => {
-    if (!resolved) return;
+    if (!resolved || resolved.provider !== "vimeo") return;
 
     const flushProgress = () => {
       if (completionSentRef.current) return;
@@ -550,13 +449,17 @@ export function StudentLessonWatch({
     );
   }
 
-  const isVimeo = resolved.provider === "vimeo";
+  if (resolved.provider === "youtube") {
+    return (
+      <YouTubeLessonWatch
+        videoId={resolved.videoId}
+        title={title}
+        materialUrl={materialUrl}
+      />
+    );
+  }
+
   const vimeoEmbedUrl = buildVimeoEmbedUrl(resolved.videoId, resumeSeconds);
-  const youtubeEmbedUrl = buildYouTubeEmbedUrl(
-    resolved.videoId,
-    resumeSeconds,
-    { enableJsApi: true }
-  );
 
   return (
     <div className="space-y-6">
@@ -572,45 +475,18 @@ export function StudentLessonWatch({
           key={`${resolved.provider}-${resolved.videoId}-${resumeSeconds}`}
           className="relative aspect-video w-full"
         >
-          {isVimeo ? (
-            <iframe
-              ref={setIframeEl}
-              src={vimeoEmbedUrl}
-              title={title}
-              className="absolute inset-0 h-full w-full border-0"
-              allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
-              allowFullScreen
-            />
-          ) : ytEmbedBlocked ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-900 px-4 text-center text-sm text-white">
-              <p>이 영상은 다른 사이트에 임베드할 수 없습니다.</p>
-              <a
-                href={youtubeWatchUrl(resolved.videoId)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-lg bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700"
-              >
-                YouTube에서 열기
-              </a>
-            </div>
-          ) : (
-            <iframe
-              ref={setYtIframeEl}
-              src={youtubeEmbedUrl}
-              title={title}
-              className="absolute inset-0 h-full w-full border-0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-              onLoad={() => {
-                setYtIframeLoaded(true);
-                setPlayerReady(true);
-              }}
-            />
-          )}
+          <iframe
+            ref={setIframeEl}
+            src={vimeoEmbedUrl}
+            title={title}
+            className="absolute inset-0 h-full w-full border-0"
+            allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
+            allowFullScreen
+          />
         </div>
       </div>
 
-      {!playerReady && !ytEmbedBlocked && (
+      {!playerReady && (
         <p className="text-xs text-slate-500">
           영상을 불러오는 중입니다. 재생이 되지 않으면 새로고침해 주세요.
         </p>
