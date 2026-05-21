@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { EnrollmentForm } from "@/components/admin/EnrollmentForm";
+import { EnrollmentList } from "@/components/admin/EnrollmentList";
 import { StudentManagement } from "@/components/admin/StudentManagement";
 import type { Course, Profile } from "@/types/database";
 
@@ -46,40 +47,17 @@ export default async function AdminStudentsPage() {
 
       <section id="enrollment-status" className="scroll-mt-8">
         <h3 className="mb-3 font-semibold">배정 내역</h3>
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full min-w-[480px] text-left text-sm">
-            <thead className="border-b bg-slate-50">
-              <tr>
-                <th className="px-4 py-3">학생</th>
-                <th className="px-4 py-3">강좌</th>
-                <th className="px-4 py-3">배정일</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(enrollments ?? []).length === 0 ? (
-                <tr>
-                  <td colSpan={3} className="px-4 py-6 text-center text-slate-500">
-                    배정 내역이 없습니다.
-                  </td>
-                </tr>
-              ) : (
-                enrollments?.map((e) => (
-                  <tr key={e.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-4 py-3">
-                      {(e.student as { name: string } | null)?.name}
-                    </td>
-                    <td className="px-4 py-3">
-                      {(e.course as { title: string } | null)?.title}
-                    </td>
-                    <td className="px-4 py-3 text-slate-500">
-                      {new Date(e.created_at).toLocaleDateString("ko-KR")}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <EnrollmentList
+          variant="admin"
+          rows={(enrollments ?? []).map((e) => ({
+            id: e.id,
+            studentName:
+              (e.student as { name: string } | null)?.name ?? "—",
+            courseTitle:
+              (e.course as { title: string } | null)?.title ?? "—",
+            createdAt: e.created_at,
+          }))}
+        />
       </section>
     </div>
   );

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { assignEnrollment } from "@/app/admin/students/actions";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import type { Course, Profile } from "@/types/database";
 
 interface EnrollmentFormProps {
@@ -46,39 +47,30 @@ export function EnrollmentForm({ students, courses }: EnrollmentFormProps) {
       className="max-w-lg space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
     >
       <h3 className="font-semibold">학생에게 강좌 배정</h3>
-      <div>
-        <label className="mb-1 block text-sm font-medium">학생</label>
-        <select
-          required
-          value={studentId}
-          onChange={(e) => setStudentId(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-        >
-          <option value="">선택</option>
-          {students.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name} ({s.email})
-            </option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className="mb-1 block text-sm font-medium">강좌</label>
-        <select
-          required
-          value={courseId}
-          onChange={(e) => setCourseId(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-        >
-          <option value="">선택</option>
-          {courses.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.title}
-              {!c.is_published ? " (비공개)" : ""}
-            </option>
-          ))}
-        </select>
-      </div>
+      <SearchableSelect
+        label="학생"
+        required
+        value={studentId}
+        onChange={setStudentId}
+        searchPlaceholder="학생 이름·아이디 검색"
+        options={students.map((s) => ({
+          value: s.id,
+          label: `${s.name} (${s.username ?? s.email})`,
+          searchText: [s.username, s.email, s.name].join(" "),
+        }))}
+      />
+      <SearchableSelect
+        label="강좌"
+        required
+        value={courseId}
+        onChange={setCourseId}
+        searchPlaceholder="강좌 제목 검색"
+        options={courses.map((c) => ({
+          value: c.id,
+          label: `${c.title}${!c.is_published ? " (비공개)" : ""}`,
+          searchText: c.title,
+        }))}
+      />
       {message && (
         <p
           className={`text-sm ${isSuccess ? "text-green-700" : "text-red-600"}`}

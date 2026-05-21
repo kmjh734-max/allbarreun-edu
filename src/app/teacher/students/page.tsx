@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/get-profile";
 import { AccountManagement } from "@/components/admin/AccountManagement";
+import { EnrollmentList } from "@/components/admin/EnrollmentList";
 import { TeacherEnrollmentForm } from "@/components/teacher/TeacherEnrollmentForm";
 import { unwrapRelation } from "@/lib/progress/enrollment-progress";
 import type { Course, Profile } from "@/types/database";
@@ -53,6 +54,8 @@ export default async function TeacherStudentsPage() {
         apiBasePath="/api/teacher/students"
         users={studentList}
         allowUsernameEdit={false}
+        showListSearch
+        listSearchPlaceholder="학생 이름·아이디 검색"
       />
 
       <section>
@@ -62,46 +65,15 @@ export default async function TeacherStudentsPage() {
 
       <section>
         <h3 className="mb-3 font-semibold">배정 내역</h3>
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full min-w-[480px] text-left text-sm">
-            <thead className="border-b bg-slate-50">
-              <tr>
-                <th className="px-4 py-3">학생</th>
-                <th className="px-4 py-3">강좌</th>
-                <th className="px-4 py-3">배정일</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(enrollments ?? []).length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={3}
-                    className="px-4 py-6 text-center text-slate-500"
-                  >
-                    배정 내역이 없습니다.
-                  </td>
-                </tr>
-              ) : (
-                (enrollments ?? []).map((e) => (
-                  <tr
-                    key={e.id}
-                    className="border-b border-slate-100 last:border-0"
-                  >
-                    <td className="px-4 py-3">
-                      {studentNameById.get(e.student_id) ?? "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      {unwrapRelation(e.course)?.title ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-slate-500">
-                      {new Date(e.created_at).toLocaleDateString("ko-KR")}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <EnrollmentList
+          variant="teacher"
+          rows={(enrollments ?? []).map((e) => ({
+            id: e.id,
+            studentName: studentNameById.get(e.student_id) ?? "—",
+            courseTitle: unwrapRelation(e.course)?.title ?? "—",
+            createdAt: e.created_at,
+          }))}
+        />
       </section>
     </div>
   );

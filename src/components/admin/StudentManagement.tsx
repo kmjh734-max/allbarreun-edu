@@ -15,6 +15,8 @@ export function StudentManagement({ students }: StudentManagementProps) {
       users={students}
       allowUsernameEdit
       allowDelete={true}
+      showListSearch
+      listSearchPlaceholder="학생 이름·아이디 검색"
     />
   );
 }

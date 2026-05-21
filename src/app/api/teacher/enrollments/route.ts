@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminJsonError, getAdminClientSafe } from "@/lib/admin/api-json";
 import { requireTeacherApi } from "@/lib/auth/require-teacher-api";
+import { unwrapRelation } from "@/lib/progress/enrollment-progress";
 
 export const runtime = "nodejs";
 
@@ -92,6 +93,68 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("[POST /api/teacher/enrollments] unexpected error:", error);
+    const message =
+      error instanceof Error ? error.message : "서버 오류가 발생했습니다.";
+    return NextResponse.json({ ok: false, message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const auth = await requireTeacherApi();
+    if ("error" in auth && auth.error) {
+      return auth.error;
+    }
+
+    const clientResult = getAdminClientSafe();
+    if (!clientResult.ok) {
+      return clientResult.response;
+    }
+
+    const enrollmentId = new URL(request.url).searchParams.get("id");
+    if (!enrollmentId) {
+      return adminJsonError("배정 정보를 찾을 수 없습니다.", 400);
+    }
+
+    const admin = clientResult.admin;
+    const teacherId = auth.profile.id;
+
+    const { data: enrollment, error: lookupError } = await admin
+      .from("enrollments")
+      .select("id, course_id, course:courses(teacher_id)")
+      .eq("id", enrollmentId)
+      .maybeSingle();
+
+    if (lookupError) {
+      return adminJsonError(lookupError.message, 400);
+    }
+
+    if (!enrollment) {
+      return adminJsonError("배정 내역을 찾을 수 없습니다.", 404);
+    }
+
+    const course = unwrapRelation(
+      enrollment.course as { teacher_id: string } | { teacher_id: string }[] | null
+    );
+    if (!course || course.teacher_id !== teacherId) {
+      return adminJsonError("담당 강좌의 배정만 해제할 수 있습니다.", 403);
+    }
+
+    const { error: deleteError } = await admin
+      .from("enrollments")
+      .delete()
+      .eq("id", enrollmentId);
+
+    if (deleteError) {
+      return adminJsonError(deleteError.message, 400);
+    }
+
+    return NextResponse.json({
+      ok: true,
+      message: "수강 배정이 해제되었습니다.",
+    });
+  } catch (error) {
+    console.error("[DELETE /api/teacher/enrollments] unexpected error:", error);
     const message =
       error instanceof Error ? error.message : "서버 오류가 발생했습니다.";
     return NextResponse.json({ ok: false, message }, { status: 500 });

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { parseAdminApiResponse } from "@/lib/admin/parse-api-response-client";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import type { Course, Profile } from "@/types/database";
 
 interface TeacherEnrollmentFormProps {
@@ -83,36 +84,31 @@ export function TeacherEnrollmentForm({
       <p className="text-sm text-slate-600">
         본인이 등록한 학생을 담당 강좌에 배정합니다.
       </p>
-      <div>
-        <label className="mb-1 block text-sm font-medium">학생</label>
-        <select
-          required
-          value={studentId}
-          onChange={(e) => setStudentId(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-        >
-          {activeStudents.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name} ({s.username})
-            </option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className="mb-1 block text-sm font-medium">강좌</label>
-        <select
-          required
-          value={courseId}
-          onChange={(e) => setCourseId(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-        >
-          {courses.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.title}
-            </option>
-          ))}
-        </select>
-      </div>
+      <SearchableSelect
+        label="학생"
+        required
+        value={studentId}
+        onChange={setStudentId}
+        emptyOptionLabel={activeStudents[0] ? "선택" : "학생 없음"}
+        searchPlaceholder="학생 이름·아이디 검색"
+        options={activeStudents.map((s) => ({
+          value: s.id,
+          label: `${s.name} (${s.username ?? "—"})`,
+          searchText: [s.username, s.name].join(" "),
+        }))}
+      />
+      <SearchableSelect
+        label="강좌"
+        required
+        value={courseId}
+        onChange={setCourseId}
+        searchPlaceholder="강좌 제목 검색"
+        options={courses.map((c) => ({
+          value: c.id,
+          label: c.title,
+          searchText: c.title,
+        }))}
+      />
       {message && (
         <p
           className={`text-sm ${isSuccess ? "text-green-700" : "text-red-600"}`}

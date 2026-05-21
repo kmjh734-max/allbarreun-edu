@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { parseAdminApiResponse } from "@/lib/admin/parse-api-response-client";
 import { formatInternalEmailHint } from "@/lib/auth/username";
+import { matchesSearch } from "@/lib/ui/filter-by-search";
 import type { Profile } from "@/types/database";
 
 export interface TeacherCourseInfo {
@@ -19,6 +20,9 @@ interface AccountManagementProps {
   /** 강사 등: 계정 완전 삭제 (관리자 전용 API DELETE) */
   allowDelete?: boolean;
   courseInfoByUserId?: Record<string, TeacherCourseInfo>;
+  /** 명단 테이블 위 검색 (이름·아이디·이메일) */
+  showListSearch?: boolean;
+  listSearchPlaceholder?: string;
 }
 
 type Message = { type: "success" | "error"; text: string } | null;
@@ -30,10 +34,13 @@ export function AccountManagement({
   allowUsernameEdit,
   allowDelete = false,
   courseInfoByUserId,
+  showListSearch = false,
+  listSearchPlaceholder = "이름·아이디로 검색",
 }: AccountManagementProps) {
   const router = useRouter();
   const [message, setMessage] = useState<Message>(null);
   const [loading, setLoading] = useState(false);
+  const [listQuery, setListQuery] = useState("");
 
   const [createName, setCreateName] = useState("");
   const [createUsername, setCreateUsername] = useState("");
@@ -294,6 +301,19 @@ export function AccountManagement({
 
   const colSpan = showCourses ? 5 : 4;
 
+  const filteredUsers = useMemo(() => {
+    if (!showListSearch || !listQuery.trim()) return initialUsers;
+    return initialUsers.filter((user) =>
+      matchesSearch(
+        listQuery,
+        user.name,
+        user.username,
+        user.email,
+        formatInternalEmailHint(user.username)
+      )
+    );
+  }, [initialUsers, listQuery, showListSearch]);
+
   return (
     <div className="space-y-8">
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -368,6 +388,17 @@ export function AccountManagement({
         </p>
       )}
 
+      {showListSearch && initialUsers.length > 0 && (
+        <input
+          type="search"
+          value={listQuery}
+          onChange={(e) => setListQuery(e.target.value)}
+          placeholder={listSearchPlaceholder}
+          className="w-full max-w-md rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          autoComplete="off"
+        />
+      )}
+
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table
           className={`w-full text-left text-sm ${
@@ -395,8 +426,17 @@ export function AccountManagement({
                   등록된 {roleLabel}이(가) 없습니다.
                 </td>
               </tr>
+            ) : filteredUsers.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={colSpan}
+                  className="px-4 py-8 text-center text-slate-500"
+                >
+                  검색 결과가 없습니다.
+                </td>
+              </tr>
             ) : (
-              initialUsers.map((user) => {
+              filteredUsers.map((user) => {
                 const isEditing = editingId === user.id;
                 const internalHint = formatInternalEmailHint(user.username);
                 const courses = courseInfoByUserId?.[user.id];

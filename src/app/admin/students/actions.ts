@@ -72,3 +72,36 @@ export async function assignEnrollment(
 
   return { ok: true, message: "강좌가 학생에게 배정되었습니다." };
 }
+
+export type RemoveEnrollmentResult =
+  | { ok: true; message: string }
+  | { ok: false; message: string };
+
+export async function removeEnrollment(
+  enrollmentId: string
+): Promise<RemoveEnrollmentResult> {
+  if (!enrollmentId) {
+    return { ok: false, message: "배정 정보를 찾을 수 없습니다." };
+  }
+
+  const profile = await getCurrentProfile();
+  if (!profile || profile.role !== "admin") {
+    return { ok: false, message: "관리자 권한이 필요합니다." };
+  }
+
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("enrollments")
+    .delete()
+    .eq("id", enrollmentId);
+
+  if (error) {
+    return { ok: false, message: error.message };
+  }
+
+  revalidatePath("/admin/students");
+  revalidatePath("/student");
+
+  return { ok: true, message: "수강 배정이 해제되었습니다." };
+}
