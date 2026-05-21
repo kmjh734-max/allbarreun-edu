@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { buildVimeoEmbedUrl, buildYouTubeEmbedUrl } from "@/lib/video/parse-url";
-import { loadYouTubeIframeApi } from "@/lib/video/load-youtube-api";
 import {
-  isYouTubeEmbedBlockedError,
-  youtubeWatchUrl,
-} from "@/lib/video/youtube-embed-fallback";
+  createYouTubeIframeBridge,
+  YT_STATE,
+} from "@/lib/video/youtube-iframe-bridge";
+import { youtubeWatchUrl } from "@/lib/video/youtube-embed-fallback";
 import { resolveLessonVideo } from "@/lib/video/lesson-fields";
 import { shouldPersistProgress } from "@/lib/lesson-progress/save-throttle";
 import {
@@ -65,7 +65,10 @@ async function postLessonProgress(payload: {
 
 type PlayerHandle =
   | { kind: "vimeo"; player: import("@vimeo/player").default }
-  | { kind: "youtube"; player: YT.Player };
+  | {
+      kind: "youtube";
+      bridge: ReturnType<typeof createYouTubeIframeBridge>;
+    };
 
 export function StudentLessonWatch({
   lessonId,
@@ -93,8 +96,6 @@ export function StudentLessonWatch({
   const [ytIframeEl, setYtIframeEl] = useState<HTMLIFrameElement | null>(null);
   const [ytIframeLoaded, setYtIframeLoaded] = useState(false);
   const [ytEmbedBlocked, setYtEmbedBlocked] = useState(false);
-  const ytPlayerInitializedRef = useRef(false);
-  const ytPlayerAttachingRef = useRef(false);
   const playerRef = useRef<PlayerHandle | null>(null);
   const completionSentRef = useRef(initialIsCompleted);
   const maxWatchedSecondsRef = useRef(Math.max(0, initialWatchedSeconds));
@@ -124,8 +125,6 @@ export function StudentLessonWatch({
     setYtIframeLoaded(false);
     setPlayerReady(false);
     setSaveError(null);
-    ytPlayerInitializedRef.current = false;
-    ytPlayerAttachingRef.current = false;
   }, [lessonId, resolved?.videoId, resolved?.provider]);
 
   const persistProgress = useCallback(
@@ -200,7 +199,7 @@ export function StudentLessonWatch({
       if (handle.kind === "vimeo") {
         await handle.player.setCurrentTime(seconds);
       } else {
-        handle.player.seekTo(seconds, true);
+        handle.bridge.seekTo(seconds);
       }
     } catch {
       /* ignore */
@@ -221,9 +220,7 @@ export function StudentLessonWatch({
         ]);
         return { seconds, duration };
       }
-      const seconds = handle.player.getCurrentTime();
-      const duration = handle.player.getDuration();
-      return { seconds, duration };
+      return null;
     } catch {
       return null;
     }
@@ -424,180 +421,85 @@ export function StudentLessonWatch({
 
     if (resolved.provider !== "youtube") return;
     if (!ytIframeEl || !ytIframeLoaded) return;
-    if (ytPlayerInitializedRef.current || ytPlayerAttachingRef.current) return;
 
-    let ytPlayer: YT.Player | null = null;
-    let pollId = 0;
     let lastYtSeconds = 0;
     let pendingResumeSeek = maxWatchedSecondsRef.current > 0;
 
-    async function attachYouTube() {
+    const bridge = createYouTubeIframeBridge(ytIframeEl, (info) => {
+      if (disposed || completionSentRef.current) return;
+
+      const { currentTime: seconds, duration, playerState } = info;
+      if (duration <= 0) return;
+
       if (
-        disposed ||
-        !ytIframeEl ||
-        ytPlayerInitializedRef.current ||
-        ytPlayerAttachingRef.current
+        pendingResumeSeek &&
+        (playerState === YT_STATE.PLAYING || playerState === YT_STATE.BUFFERING)
       ) {
+        const resumeTo = maxWatchedSecondsRef.current;
+        if (resumeTo > 0) {
+          const seekTo = Math.max(0, resumeTo - 1);
+          bridge.seekTo(seekTo);
+          lastTickSecondsRef.current = seekTo;
+          lastYtSeconds = seekTo;
+          resumeGraceUntilRef.current = Date.now() + 4000;
+        }
+        pendingResumeSeek = false;
+      }
+
+      if (playerState === YT_STATE.ENDED) {
+        maxWatchedSecondsRef.current = Math.max(
+          maxWatchedSecondsRef.current,
+          duration
+        );
+        void (async () => {
+          if (isCompletionReached(maxWatchedSecondsRef.current, duration)) {
+            await handleCompleteRef.current(
+              maxWatchedSecondsRef.current,
+              duration
+            );
+          } else {
+            await syncFromPlayheadRef.current(
+              maxWatchedSecondsRef.current,
+              duration,
+              true
+            );
+          }
+        })();
         return;
       }
 
-      try {
-        ytPlayerAttachingRef.current = true;
-        await loadYouTubeIframeApi();
-        if (disposed || !ytIframeEl) return;
-
-        ytPlayer = new YT.Player(ytIframeEl, {
-          events: {
-            onReady: (event) => {
-              if (disposed) return;
-              ytPlayerInitializedRef.current = true;
-              ytPlayerAttachingRef.current = false;
-              playerRef.current = { kind: "youtube", player: event.target };
-              setPlayerReady(true);
-            },
-            onError: (event) => {
-              if (disposed) return;
-              ytPlayerAttachingRef.current = false;
-              if (isYouTubeEmbedBlockedError(event.data)) {
-                setYtEmbedBlocked(true);
-                setPlayerReady(true);
-                return;
-              }
-              setSaveError(
-                "영상을 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요."
-              );
-            },
-            onStateChange: (event) => {
-              if (disposed || completionSentRef.current) return;
-
-              const duration = event.target.getDuration();
-              if (duration <= 0) return;
-
-              if (
-                pendingResumeSeek &&
-                !completionSentRef.current &&
-                (event.data === YT.PlayerState.PLAYING ||
-                  event.data === YT.PlayerState.BUFFERING)
-              ) {
-                const resumeTo = maxWatchedSecondsRef.current;
-                if (resumeTo > 0) {
-                  const seekTo = Math.max(0, resumeTo - 1);
-                  try {
-                    event.target.seekTo(seekTo, true);
-                    lastTickSecondsRef.current = seekTo;
-                    lastYtSeconds = seekTo;
-                    resumeGraceUntilRef.current = Date.now() + 4000;
-                  } catch {
-                    /* ignore */
-                  }
-                }
-                pendingResumeSeek = false;
-              }
-
-              if (event.data === YT.PlayerState.ENDED) {
-                maxWatchedSecondsRef.current = Math.max(
-                  maxWatchedSecondsRef.current,
-                  duration
-                );
-                void (async () => {
-                  if (
-                    isCompletionReached(
-                      maxWatchedSecondsRef.current,
-                      duration
-                    )
-                  ) {
-                    await handleCompleteRef.current(
-                      maxWatchedSecondsRef.current,
-                      duration
-                    );
-                  } else {
-                    await syncFromPlayheadRef.current(
-                      maxWatchedSecondsRef.current,
-                      duration,
-                      true
-                    );
-                  }
-                })();
-                return;
-              }
-
-              if (
-                event.data === YT.PlayerState.PLAYING ||
-                event.data === YT.PlayerState.PAUSED
-              ) {
-                const seconds = event.target.getCurrentTime();
-                const forceSave = event.data === YT.PlayerState.PAUSED;
-                if (
-                  event.data === YT.PlayerState.PLAYING &&
-                  isForwardSeekBeyondMax(
-                    seconds,
-                    maxWatchedSecondsRef.current
-                  ) &&
-                  seconds - lastYtSeconds > 2
-                ) {
-                  const max = maxWatchedSecondsRef.current;
-                  event.target.seekTo(max, true);
-                  lastTickSecondsRef.current = max;
-                  setSeekNotice(
-                    "앞으로 건너뛸 수 없습니다. 이어서 시청해 주세요."
-                  );
-                  return;
-                }
-                lastYtSeconds = seconds;
-                void syncFromPlayheadRef.current(
-                  seconds,
-                  duration,
-                  forceSave
-                );
-              }
-            },
-          },
-        });
-      } catch (err) {
-        console.error("[StudentLessonWatch] YouTube init failed:", err);
-        ytPlayerAttachingRef.current = false;
-        setSaveError(
-          "영상 플레이어 연결에 실패했습니다. 새로고침 후 다시 시도해 주세요."
-        );
+      if (
+        playerState === YT_STATE.PLAYING ||
+        playerState === YT_STATE.PAUSED
+      ) {
+        const forceSave = playerState === YT_STATE.PAUSED;
+        if (
+          playerState === YT_STATE.PLAYING &&
+          isForwardSeekBeyondMax(seconds, maxWatchedSecondsRef.current) &&
+          seconds - lastYtSeconds > 2
+        ) {
+          const max = maxWatchedSecondsRef.current;
+          bridge.seekTo(max);
+          lastTickSecondsRef.current = max;
+          setSeekNotice("앞으로 건너뛸 수 없습니다. 이어서 시청해 주세요.");
+          return;
+        }
+        lastYtSeconds = seconds;
+        void syncFromPlayheadRef.current(seconds, duration, forceSave);
       }
-    }
+    });
 
-    void attachYouTube();
-
-    pollId = window.setInterval(() => {
-      if (disposed || completionSentRef.current) return;
-      void (async () => {
-        const state = await getPlaybackState();
-        if (!state || state.duration <= 0) return;
-        await syncFromPlayheadRef.current(
-          state.seconds,
-          state.duration,
-          false
-        );
-      })();
-    }, 4000);
+    playerRef.current = { kind: "youtube", bridge };
+    bridge.start();
+    setPlayerReady(true);
 
     return () => {
       disposed = true;
-      window.clearInterval(pollId);
       setPlayerReady(false);
-      ytPlayerInitializedRef.current = false;
-      ytPlayerAttachingRef.current = false;
-      try {
-        ytPlayer?.destroy();
-      } catch {
-        /* ignore */
-      }
+      bridge.destroy();
       playerRef.current = null;
     };
-  }, [
-    resolved,
-    iframeEl,
-    ytIframeEl,
-    ytIframeLoaded,
-    resumeSeconds,
-    getPlaybackState,
-  ]);
+  }, [resolved, iframeEl, ytIframeEl, ytIframeLoaded, resumeSeconds]);
 
   useEffect(() => {
     if (!resolved) return;
@@ -699,7 +601,10 @@ export function StudentLessonWatch({
               className="absolute inset-0 h-full w-full border-0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
-              onLoad={() => setYtIframeLoaded(true)}
+              onLoad={() => {
+                setYtIframeLoaded(true);
+                setPlayerReady(true);
+              }}
             />
           )}
         </div>
