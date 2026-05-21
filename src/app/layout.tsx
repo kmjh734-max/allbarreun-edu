@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import {
-  LOGO_SRC,
+  OG_IMAGE_URL,
   SITE_DESCRIPTION,
   SITE_NAME,
   SITE_URL,
@@ -20,10 +20,11 @@ export const metadata: Metadata = {
     description: SITE_DESCRIPTION,
     images: [
       {
-        url: LOGO_SRC,
-        width: 800,
-        height: 800,
+        url: OG_IMAGE_URL,
+        width: 1200,
+        height: 630,
         alt: SITE_NAME,
+        type: "image/png",
       },
     ],
   },
@@ -31,7 +32,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: SITE_NAME,
     description: SITE_DESCRIPTION,
-    images: [LOGO_SRC],
+    images: [OG_IMAGE_URL],
   },
 };
 
