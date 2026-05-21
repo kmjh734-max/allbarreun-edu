@@ -125,6 +125,7 @@ export function parseVideoLink(url: string): ParsedVideoLink | null {
   return null;
 }
 
+/** 학생 시청: enablejsapi + origin 으로 IFrame API와 같은 iframe 공유 */
 export function buildYouTubeEmbedUrl(
   videoId: string,
   startSeconds?: number,
@@ -137,12 +138,15 @@ export function buildYouTubeEmbedUrl(
   });
   if (options?.enableJsApi) {
     params.set("enablejsapi", "1");
+    if (typeof window !== "undefined") {
+      params.set("origin", window.location.origin);
+    }
   }
   const start = Math.max(0, Math.floor(startSeconds ?? 0));
   if (start > 0) {
     params.set("start", String(start));
   }
-  return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
+  return `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
 }
 
 export function buildVimeoEmbedUrl(
