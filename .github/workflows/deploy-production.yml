@@ -1,15 +1,16 @@
-# Vercel GitHub 연동(Settings → Git)이 켜져 있으면 main 푸시만으로 자동 배포됩니다.
-# Deploy Hook + push 워크플로를 동시에 쓰면 배포가 Queue에 쌓여 멈춘 것처럼 보일 수 있습니다.
+# 올바른교육(allbarreun-edu) 전용 — jeongsu-lms Vercel Deploy Hook 사용 금지
 #
-# 수동 재배포만 필요할 때: Actions → "Deploy to Vercel (Production)" → Run workflow
+# Vercel에서 allbarreun-edu 프로젝트를 GitHub 저장소와 연결하면 main push만으로 배포됩니다.
+# Deploy Hook을 쓸 때만: Vercel(allbarreun-edu) → Deploy Hooks → GitHub Secret
+#   이름: ALLBARREUN_VERCEL_DEPLOY_HOOK (기존 VERCEL_DEPLOY_HOOK 은 jeongsu용이면 삭제)
 
-name: Deploy to Vercel (Production)
+name: Deploy allbarreun-edu to Vercel (Production)
 
 on:
   workflow_dispatch:
 
 concurrency:
-  group: vercel-production
+  group: vercel-allbarreun-production
   cancel-in-progress: true
 
 jobs:
@@ -18,14 +19,14 @@ jobs:
     steps:
       - name: Trigger Vercel production deploy
         env:
-          DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+          DEPLOY_HOOK: ${{ secrets.ALLBARREUN_VERCEL_DEPLOY_HOOK }}
         run: |
           if [ -z "$DEPLOY_HOOK" ]; then
-            echo "::error::VERCEL_DEPLOY_HOOK secret이 없습니다."
-            echo "Vercel → Project → Settings → Git → Deploy Hooks 에서 main 훅 URL을 만들고"
-            echo "GitHub Secrets에 VERCEL_DEPLOY_HOOK 으로 등록하세요."
-            echo "또는 Vercel Git 연동만 사용하고 이 워크플로는 실행하지 마세요."
+            echo "::error::ALLBARREUN_VERCEL_DEPLOY_HOOK secret이 없습니다."
+            echo "Vercel 프로젝트 allbarreun-edu → Settings → Git → Deploy Hooks"
+            echo "GitHub 저장소 allbarreun-edu → Secrets → ALLBARREUN_VERCEL_DEPLOY_HOOK"
+            echo "jeongsu-lms 프로젝트의 Hook URL은 사용하지 마세요."
             exit 1
           fi
           curl -fsSL -X POST "$DEPLOY_HOOK"
-          echo "Vercel 배포가 시작되었습니다."
+          echo "allbarreun-edu Vercel 배포가 시작되었습니다."

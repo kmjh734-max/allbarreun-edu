@@ -182,6 +182,8 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
 
 ## 새 학원용 Vercel 배포 방법
 
+> **jeongsu-lms 와 분리:** [docs/ALLBARREUN_DEPLOY.md](docs/ALLBARREUN_DEPLOY.md) 필독 (기존 Vercel 프로젝트에 연결되지 않게)
+
 1. [Vercel Dashboard](https://vercel.com) → **Add New Project**
 2. **새 학원용 GitHub 저장소** Import (위에서 연결한 저장소)
 3. **Environment Variables**에 새 Supabase 값 3개 입력

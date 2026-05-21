@@ -1,8 +1,10 @@
 # Vercel 자동 배포 설정 (main 푸시 → 프로덕션)
 
-> **새 학원 복제본:** 아래 `저장소`, `프로젝트명`, `배포 URL`을 **새 학원용 GitHub·Vercel 프로젝트**로 바꿔 사용하세요. 기존 `jeongsu-lms` 등 이전 학원 프로젝트와 연결하지 마세요.
+> **올바른교육:** jeongsu-lms Vercel/GitHub와 **절대 공유하지 마세요.**  
+> 상세 분리 절차: [ALLBARREUN_DEPLOY.md](./ALLBARREUN_DEPLOY.md)
 
-GitHub: `https://github.com/내아이디/새저장소명`
+GitHub: `https://github.com/kmjh734-max/allbarreun-edu`  
+Vercel 프로젝트명: **`allbarreun-edu`** (jeongsu-lms 아님)
 
 ## 1. Vercel ↔ GitHub 연결
 
