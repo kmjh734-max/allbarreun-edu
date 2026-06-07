@@ -12,23 +12,11 @@ import {
   isUnsupportedTemperatureError,
 } from "@/lib/student-records/model";
 import { isReliableStudentRecordExtract } from "@/lib/student-records/ocr-quality";
+import { PDF_OCR_SYSTEM } from "@/lib/student-records/ocr-prompts";
+import { extractNativePdfText } from "@/lib/student-records/pdf-native-text";
 import { convertPdfBufferToPageImages } from "@/lib/student-records/pdf-to-images";
 import type { StudentRecordPdfDocument } from "@/lib/student-records/types";
 import { extractTextFromPageImages } from "@/lib/student-records/vision-extract";
-
-const PDF_OCR_SYSTEM = `당신은 학교생활기록부 OCR·전사 전문가입니다.
-첨부 PDF의 모든 페이지를 빠짐없이 읽고 한국어로 전사합니다.
-
-반드시 포함:
-- 학생명, 학교명, 학년
-- 성적표(학기, 과목, 학점, 성취도, 석차등급)
-- 교과 세특, 창의적 체험활동, 봉사활동, 행동특성 및 종합의견
-
-규칙:
-- 보이는 내용만 적고 추측하지 않습니다.
-- 판독 불가 항목은 [판독불가]로 표시합니다.
-- 페이지 구분: === 페이지 N === 형식 사용
-- 마크다운 없이 일반 텍스트만 출력합니다.`;
 
 type FileContentPart =
   | { type: "text"; text: string }
@@ -37,12 +25,14 @@ type FileContentPart =
 
 type RequestProfile = {
   includeTemperature: boolean;
+  includeSeed: boolean;
   includeReasoningEffort: boolean;
 };
 
 function defaultProfile(model: string): RequestProfile {
   return {
     includeTemperature: !isGpt5FamilyModel(model),
+    includeSeed: true,
     includeReasoningEffort: false,
   };
 }
@@ -56,6 +46,10 @@ function relaxProfile(
 
   if (next.includeTemperature && isUnsupportedTemperatureError(bodyText)) {
     next.includeTemperature = false;
+    changed = true;
+  }
+  if (next.includeSeed && isUnsupportedParameterError(bodyText, "seed")) {
+    next.includeSeed = false;
     changed = true;
   }
   if (
@@ -256,6 +250,12 @@ async function ocrSinglePdf(
   signal: AbortSignal
 ): Promise<string | null> {
   const buffer = pdfDataUrlToBuffer(pdf.dataUrl);
+
+  // 0) PDF 내장 텍스트 (디지털 PDF — 결정적·OCR 변동 없음)
+  const nativeText = await extractNativePdfText(buffer);
+  if (nativeText && isReliableStudentRecordExtract(nativeText)) {
+    return `=== PDF OCR: ${pdf.name} ===\n${nativeText}`;
+  }
 
   // 1) 고해상도 페이지 이미지 + Vision (스캔 PDF에 가장 정확)
   let text = await ocrViaRenderedPages(

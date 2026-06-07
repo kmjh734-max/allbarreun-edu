@@ -1,4 +1,5 @@
 import { STUDENT_RECORD_ANALYSIS_TIMEOUT_MS } from "@/lib/student-records/limits";
+import { buildVerifiedGradeBlock } from "@/lib/student-records/grade-extract";
 import {
   isReliableStudentRecordExtract,
   stripOcrPlaceholders,
@@ -90,7 +91,17 @@ export async function extractStudentRecordContent(
       };
     }
 
-    return { ok: true, text: substantive };
+    let finalText = substantive;
+    const gradeBlock = await buildVerifiedGradeBlock(
+      apiKey,
+      substantive,
+      controller.signal
+    );
+    if (gradeBlock) {
+      finalText = `${substantive}\n\n${gradeBlock}`;
+    }
+
+    return { ok: true, text: finalText };
   } catch {
     return {
       ok: false,

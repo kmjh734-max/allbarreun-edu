@@ -1,5 +1,9 @@
 import { isGpt5FamilyModel } from "@/lib/student-records/model";
 
+/** OCR 재현성 — 동일 입력 시 전사 변동 최소화 */
+export const OCR_TEMPERATURE = 0;
+export const OCR_DETERMINISTIC_SEED = 42;
+
 /** PDF 직접 OCR 1회 출력 상한 */
 export const PDF_OCR_MAX_OUTPUT_TOKENS = 16_384;
 
@@ -43,6 +47,7 @@ export function buildOcrChatBody(
   content: unknown,
   options?: {
     includeTemperature?: boolean;
+    includeSeed?: boolean;
     /** OCR 전사는 reasoning 비활성 — 출력 토큰을 전사에만 사용 */
     includeReasoningEffort?: boolean;
     maxOutputTokens?: number;
@@ -50,6 +55,7 @@ export function buildOcrChatBody(
 ): Record<string, unknown> {
   const includeTemperature =
     options?.includeTemperature ?? !isGpt5FamilyModel(model);
+  const includeSeed = options?.includeSeed ?? true;
   const includeReasoningEffort = options?.includeReasoningEffort ?? false;
   const maxOut = options?.maxOutputTokens ?? PDF_OCR_MAX_OUTPUT_TOKENS;
 
@@ -62,7 +68,12 @@ export function buildOcrChatBody(
   };
 
   if (includeTemperature) {
-    body.temperature = 0.1;
+    body.temperature = OCR_TEMPERATURE;
+    body.top_p = 1;
+  }
+
+  if (includeSeed) {
+    body.seed = OCR_DETERMINISTIC_SEED;
   }
 
   if (isGpt5FamilyModel(model)) {

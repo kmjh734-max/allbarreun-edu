@@ -15,6 +15,7 @@ import {
   getOcrModelCandidates,
   VISION_OCR_MAX_OUTPUT_TOKENS,
 } from "@/lib/student-records/ocr-chat";
+import { VISION_PAGE_EXTRACTION_SYSTEM } from "@/lib/student-records/ocr-prompts";
 
 type ImageDetail = "auto" | "high";
 
@@ -22,15 +23,9 @@ type ContentPart =
   | { type: "text"; text: string }
   | { type: "image_url"; image_url: { url: string; detail: ImageDetail } };
 
-const PAGE_EXTRACTION_SYSTEM = `당신은 학교생활기록부 OCR·전사 전문가입니다.
-첨부된 학생부 페이지 이미지에서 보이는 내용을 빠짐없이 한국어로 전사합니다.
-성적(학기,과목,학점,성취도,석차등급), 세특, 창의적체험활동, 봉사, 행동특성 및 종합의견을 구분해 정리합니다.
-여러 페이지가 있으면 각 페이지마다 === 학생부 페이지 N 전사 === 로 구분합니다.
-보이지 않는 내용은 추측하지 말고 [판독불가]로 표시합니다.
-마크다운이 아닌 일반 텍스트로만 출력합니다.`;
-
 type RequestProfile = {
   includeTemperature: boolean;
+  includeSeed: boolean;
 };
 
 let lastVisionApiError: string | null = null;
@@ -44,20 +39,30 @@ export function resetLastVisionApiError(): void {
 }
 
 function defaultProfile(): RequestProfile {
-  return { includeTemperature: true };
+  return { includeTemperature: true, includeSeed: true };
 }
 
 function relaxProfile(
   profile: RequestProfile,
   bodyText: string
 ): RequestProfile | null {
-  if (profile.includeTemperature && isUnsupportedTemperatureError(bodyText)) {
-    return { includeTemperature: false };
+  const next = { ...profile };
+  let changed = false;
+
+  if (next.includeTemperature && isUnsupportedTemperatureError(bodyText)) {
+    next.includeTemperature = false;
+    changed = true;
+  }
+  if (next.includeSeed && isUnsupportedParameterError(bodyText, "seed")) {
+    next.includeSeed = false;
+    changed = true;
   }
   if (isUnsupportedParameterError(bodyText, "reasoning_effort")) {
-    return { includeTemperature: false };
+    next.includeTemperature = false;
+    changed = true;
   }
-  return null;
+
+  return changed ? next : null;
 }
 
 function isUsefulOcrText(text: string): boolean {
@@ -117,6 +122,7 @@ async function callVisionText(
         body: JSON.stringify(
           buildOcrChatBody(model, system, contentWithDetail, {
             includeTemperature: profile.includeTemperature,
+            includeSeed: profile.includeSeed,
             includeReasoningEffort: false,
             maxOutputTokens: VISION_OCR_MAX_OUTPUT_TOKENS,
           })
@@ -171,7 +177,7 @@ async function extractSinglePage(
   const userText = [
     `학생: ${studentName}`,
     `학생부 페이지 ${pageNum} (총 ${totalPages}페이지 중)`,
-    "이 페이지 내용을 빠짐없이 전사·정리해 주세요.",
+    "이 페이지 내용을 보이는 그대로 전사해 주세요. 성적 숫자(석차등급·학점)는 절대 수정하지 마세요.",
     "출력 시작: === 학생부 페이지 N 전사 ===",
   ].join("\n");
 
@@ -183,7 +189,7 @@ async function extractSinglePage(
 
     const extracted = await callVisionText(
       apiKey,
-      PAGE_EXTRACTION_SYSTEM,
+      VISION_PAGE_EXTRACTION_SYSTEM,
       content,
       signal,
       detail
@@ -209,7 +215,7 @@ async function extractPageBatch(
   const userText = [
     `학생: ${studentName}`,
     `학생부 페이지 ${pageNums.join(", ")} (총 ${totalPages}페이지 중)`,
-    "각 페이지를 순서대로 전사하고, 페이지마다 === 학생부 페이지 N 전사 === 로 구분하세요.",
+    "각 페이지를 순서대로 그대로 전사하고, 페이지마다 === 학생부 페이지 N 전사 === 로 구분하세요.",
   ].join("\n");
 
   for (const detail of ["high"] as const) {
@@ -220,7 +226,7 @@ async function extractPageBatch(
 
     const extracted = await callVisionText(
       apiKey,
-      PAGE_EXTRACTION_SYSTEM,
+      VISION_PAGE_EXTRACTION_SYSTEM,
       content,
       signal,
       detail
