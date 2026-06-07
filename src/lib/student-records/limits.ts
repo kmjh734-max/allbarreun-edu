@@ -9,8 +9,8 @@ export const STUDENT_RECORD_MAX_DIRECT_IMAGES = 10;
 /** 스캔 PDF → Vision 변환 최대 페이지 */
 export const STUDENT_RECORD_MAX_PDF_PAGES = 40;
 
-/** PDF 페이지 렌더 해상도 (OCR 정확도 — 2000px 권장) */
-export const STUDENT_RECORD_PDF_RENDER_WIDTH = 2000;
+/** PDF 페이지 렌더 해상도 (OCR 정확도 — 2400px, 클라이언트 JPEG와 동일) */
+export const STUDENT_RECORD_PDF_RENDER_WIDTH = 2400;
 
 /** Vision 1회 API 호출당 페이지 수 (1 = 페이지별 고품질) */
 export const STUDENT_RECORD_VISION_BATCH_SIZE = 1;

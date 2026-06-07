@@ -47,3 +47,22 @@ export function isReliableStudentRecordExtract(text: string): boolean {
 
   return true;
 }
+
+/** 페이지 1장 OCR 품질 점수 (모델 후보 중 최고 결과 선택용) */
+export function scorePageOcrText(text: string): number {
+  const body = text.trim();
+  if (!body || body.includes("[이 구간 판독 실패]")) return 0;
+
+  const compact = body.replace(/\s+/g, "");
+  if (compact.length < 40) return 0;
+
+  let score = Math.min(compact.length, 4000);
+  score += (body.match(/[가-힣·]{2,}\d?/g) ?? []).length * 12;
+  score += (body.match(/석차|[1-9]\s*등급|성취도|학점|세특|교과/g) ?? []).length * 20;
+  score -= (body.match(/\[판독불가\]/g) ?? []).length * 25;
+  return score;
+}
+
+export function isAcceptablePageOcr(text: string): boolean {
+  return scorePageOcrText(text) >= 100;
+}

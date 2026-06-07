@@ -225,6 +225,7 @@ async function callGradeExtract(
 
     for (let attempt = 0; attempt < 3; attempt++) {
       const body = buildOcrChatBody(model, GRADE_EXTRACT_SYSTEM, userText, {
+        mode: "structured",
         includeTemperature: profile.includeTemperature,
         includeSeed: profile.includeSeed,
         includeReasoningEffort: false,

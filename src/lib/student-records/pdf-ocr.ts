@@ -32,7 +32,7 @@ type RequestProfile = {
 function defaultProfile(model: string): RequestProfile {
   return {
     includeTemperature: !isGpt5FamilyModel(model),
-    includeSeed: true,
+    includeSeed: false,
     includeReasoningEffort: false,
   };
 }
@@ -82,6 +82,7 @@ async function callOcrChat(
       body: JSON.stringify(
         buildOcrChatBody(model, PDF_OCR_SYSTEM, content, {
           ...profile,
+          mode: "vision",
           maxOutputTokens: PDF_OCR_MAX_OUTPUT_TOKENS,
         })
       ),
@@ -251,13 +252,10 @@ async function ocrSinglePdf(
 ): Promise<string | null> {
   const buffer = pdfDataUrlToBuffer(pdf.dataUrl);
 
-  // 0) PDF 내장 텍스트 (디지털 PDF — 결정적·OCR 변동 없음)
+  // 0) PDF 내장 텍스트 (디지털 PDF 보조 — 스캔 PDF는 Vision 필수)
   const nativeText = await extractNativePdfText(buffer);
-  if (nativeText && isReliableStudentRecordExtract(nativeText)) {
-    return `=== PDF OCR: ${pdf.name} ===\n${nativeText}`;
-  }
 
-  // 1) 고해상도 페이지 이미지 + Vision (스캔 PDF에 가장 정확)
+  // 1) 고해상도 페이지 이미지 + Vision (스캔 PDF·이미지에 가장 정확)
   let text = await ocrViaRenderedPages(
     apiKey,
     buffer,
@@ -265,7 +263,17 @@ async function ocrSinglePdf(
     studentName,
     signal
   );
+
+  if (text && nativeText) {
+    text = `${text}\n\n${nativeText}`;
+  }
+
   if (text && isReliableStudentRecordExtract(text)) return text;
+
+  // Vision 실패 시에만 내장 텍스트 단독 사용
+  if (nativeText && isReliableStudentRecordExtract(nativeText)) {
+    return `=== PDF OCR: ${pdf.name} ===\n${nativeText}`;
+  }
 
   // 2) OpenAI Files API 업로드
   text = await ocrViaUploadedFile(

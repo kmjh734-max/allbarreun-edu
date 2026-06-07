@@ -4,11 +4,14 @@ import {
   STUDENT_RECORD_VISION_CONCURRENCY,
 } from "@/lib/student-records/limits";
 import {
-  isGpt5FamilyModel,
   isModelUnavailableError,
   isUnsupportedParameterError,
   isUnsupportedTemperatureError,
 } from "@/lib/student-records/model";
+import {
+  isAcceptablePageOcr,
+  scorePageOcrText,
+} from "@/lib/student-records/ocr-quality";
 import { summarizeOpenAiError } from "@/lib/student-records/openai-errors";
 import {
   buildOcrChatBody,
@@ -39,7 +42,7 @@ export function resetLastVisionApiError(): void {
 }
 
 function defaultProfile(): RequestProfile {
-  return { includeTemperature: true, includeSeed: true };
+  return { includeTemperature: true, includeSeed: false };
 }
 
 function relaxProfile(
@@ -66,7 +69,7 @@ function relaxProfile(
 }
 
 function isUsefulOcrText(text: string): boolean {
-  return text.replace(/\s+/g, "").length >= 30;
+  return isAcceptablePageOcr(text);
 }
 
 function isValidBatchExtract(text: string, expectedPages: number): boolean {
@@ -106,6 +109,7 @@ async function callVisionText(
   });
 
   const models = getOcrModelCandidates();
+  let best: { text: string; score: number } | null = null;
 
   for (let modelIndex = 0; modelIndex < models.length; modelIndex++) {
     const model = models[modelIndex]!;
@@ -121,6 +125,7 @@ async function callVisionText(
         signal,
         body: JSON.stringify(
           buildOcrChatBody(model, system, contentWithDetail, {
+            mode: "vision",
             includeTemperature: profile.includeTemperature,
             includeSeed: profile.includeSeed,
             includeReasoningEffort: false,
@@ -159,11 +164,16 @@ async function callVisionText(
       const raw = extractChatMessageContent(
         parsed.choices?.[0]?.message?.content
       );
-      if (isUsefulOcrText(raw)) return raw;
+      if (!isUsefulOcrText(raw)) continue;
+
+      const score = scorePageOcrText(raw);
+      if (!best || score > best.score) {
+        best = { text: raw, score };
+      }
     }
   }
 
-  return null;
+  return best?.text ?? null;
 }
 
 async function extractSinglePage(
