@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { buildStudentRecordKakaoMessage } from "@/lib/student-records/build-kakao-message";
+import { buildStudentRecordKakaoMessage, formatStudentRecordReportSubject } from "@/lib/student-records/build-kakao-message";
 import {
   isKakaoShareConfigured,
   loadKakaoSdkForReports,
@@ -142,7 +142,7 @@ export function StudentRecordShareActions({
         periodLabel: "학생부 분석",
         shareUrl: url,
         feedTitle: "학생부 분석 리포트",
-        feedDescription: `${studentName} 학생 학교생활기록부 분석 보고서입니다. 아래 링크에서 확인해 주세요.`,
+        feedDescription: `${formatStudentRecordReportSubject(studentName)} 아래 링크에서 확인해 주세요.`,
         buttonTitle: "자세히 보기",
         pasteMessage,
       });
