@@ -1,5 +1,16 @@
 {
   "framework": "nextjs",
   "buildCommand": "npm run build",
-  "installCommand": "npm install"
+  "installCommand": "npm install",
+  "functions": {
+    "src/app/api/student-records/extract/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/student-records/generate/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/student-records/analyze/route.ts": {
+      "maxDuration": 300
+    }
+  }
 }

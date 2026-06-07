@@ -9,10 +9,13 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^0.1.80",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.8",
     "@vimeo/player": "^2.30.4",
     "next": "^15.3.3",
+    "pdf-parse": "^2.4.5",
+    "pdfjs-dist": "^4.10.38",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

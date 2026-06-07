@@ -6,27 +6,35 @@ import {
 } from "@/lib/auth/roles";
 import type { UserRole } from "@/types/database";
 
-const PUBLIC_PATHS = ["/login", "/auth/callback"];
+const PUBLIC_PREFIXES = [
+  "/login",
+  "/auth/callback",
+  "/student-record/share",
+];
+
+function isPublicPath(pathname: string): boolean {
+  if (
+    PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+  ) {
+    return true;
+  }
+  if (pathname.startsWith("/_next")) return true;
+  if (pathname.startsWith("/favicon")) return true;
+  if (pathname.startsWith("/image/")) return true;
+  if (/\.(svg|png|jpg|jpeg|gif|webp|ico)$/i.test(pathname)) return true;
+  return false;
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/favicon") ||
-    pathname.includes(".")
-  ) {
+  if (isPublicPath(pathname)) {
     return NextResponse.next();
   }
 
   const { supabase, user, supabaseResponse } = await updateSession(request);
 
-  const isPublic = PUBLIC_PATHS.some(
-    (p) => pathname === p || pathname.startsWith(`${p}/`)
-  );
-
   if (!user) {
-    if (isPublic) return supabaseResponse;
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirectTo", pathname);
