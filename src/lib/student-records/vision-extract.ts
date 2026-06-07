@@ -93,6 +93,9 @@ function chunkPages<T>(items: T[], size: number): T[][] {
   return chunks;
 }
 
+/** 충분히 읽힌 페이지면 추가 모델 시도 없이 즉시 반환 */
+const PAGE_OCR_EARLY_EXIT_SCORE = 280;
+
 async function callVisionText(
   apiKey: string,
   system: string,
@@ -167,6 +170,9 @@ async function callVisionText(
       if (!isUsefulOcrText(raw)) continue;
 
       const score = scorePageOcrText(raw);
+      if (score >= PAGE_OCR_EARLY_EXIT_SCORE) {
+        return raw;
+      }
       if (!best || score > best.score) {
         best = { text: raw, score };
       }

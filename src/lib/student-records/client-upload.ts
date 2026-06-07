@@ -231,7 +231,7 @@ export async function readStudentRecordApiResponse<T extends { ok?: boolean; mes
       return {
         data: null,
         error:
-          "분석 시간이 서버 한도를 초과했습니다. PDF 용량을 줄이거나 잠시 후 다시 시도해 주세요.",
+          "처리 시간이 서버 한도(약 1~5분)를 초과했습니다. PDF 페이지 수를 줄이거나 잠시 후 다시 시도해 주세요. (용량이 작아도 페이지·OCR 단계가 많으면 시간이 걸립니다.)",
       };
     }
     if (res.status === 502 || res.status === 503) {

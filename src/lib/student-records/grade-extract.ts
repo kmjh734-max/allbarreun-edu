@@ -282,6 +282,15 @@ async function extractAllGradeRows(
   signal: AbortSignal
 ): Promise<ParsedGradeRow[] | null> {
   const regexRows = parseGradesFromOcrText(ocrText);
+  const gradedRegex = regexRows.filter((row) => row.rankGrade != null);
+
+  if (
+    gradedRegex.length >= 4 &&
+    !isExtractIncomplete(regexRows, ocrText)
+  ) {
+    return regexRows;
+  }
+
   const llmRows = (await callGradeExtract(apiKey, ocrText, signal)) ?? [];
 
   let merged = mergeGradeRows(regexRows, llmRows);
