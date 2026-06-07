@@ -12,17 +12,15 @@ import {
   buildOcrChatBody,
   getOcrModelCandidates,
 } from "@/lib/student-records/ocr-chat";
-
-type GradeRow = {
-  semester: string;
-  subject: string;
-  credits: number;
-  achievement?: string;
-  rankGrade: number | null;
-};
+import {
+  estimateGradeRowCountInText,
+  mergeGradeRows,
+  parseGradesFromOcrText,
+  type ParsedGradeRow,
+} from "@/lib/student-records/parse-grades-from-text";
 
 type GradeExtractJson = {
-  rows?: GradeRow[];
+  rows?: ParsedGradeRow[];
 };
 
 type RequestProfile = {
@@ -31,7 +29,7 @@ type RequestProfile = {
   includeJsonFormat: boolean;
 };
 
-const GRADE_EXTRACT_SYSTEM = `학교생활기록부 OCR 텍스트에서 교과 성적표만 JSON으로 추출합니다.
+const GRADE_EXTRACT_SYSTEM = `학교생활기록부 OCR 텍스트에서 교과 성적표(교과학습발달상황)만 JSON으로 추출합니다.
 JSON만 출력하세요. 다른 설명 금지.
 
 스키마:
@@ -48,10 +46,14 @@ JSON만 출력하세요. 다른 설명 금지.
 }
 
 규칙:
+- OCR 텍스트에 있는 **모든** 교과목 행을 빠짐없이 rows에 포함 (학기당 보통 5~10과목)
+- 공통국어1·공통수학1·공통영어1·통합과학1 등 숫자 붙은 과목명도 각각 별도 row
 - rankGrade: 석차등급 1~9 정수. 텍스트에 없으면 null (진로·예체능·비등급)
 - credits: 이수학점 양수
+- semester: "N학년 M학기" 형식 (표 제목·학기 구분에서 추출)
 - 텍스트에 없는 과목·숫자는 넣지 않음 (추측 금지)
-- achievement: A/B/C 등, 없으면 생략`;
+- achievement: A/B/C 등, 없으면 생략
+- 세특·창의적체험·봉사·행동특성 문장은 rows에 넣지 않음`;
 
 function defaultProfile(): RequestProfile {
   return {
@@ -87,7 +89,7 @@ function relaxProfile(
   return changed ? next : null;
 }
 
-function parseGradeRows(raw: string): GradeRow[] {
+function parseGradeRows(raw: string): ParsedGradeRow[] {
   try {
     const parsed = JSON.parse(raw) as GradeExtractJson;
     if (!Array.isArray(parsed.rows)) return [];
@@ -118,7 +120,7 @@ function parseGradeRows(raw: string): GradeRow[] {
   }
 }
 
-function weightedRankAverage(rows: GradeRow[]): number | null {
+function weightedRankAverage(rows: ParsedGradeRow[]): number | null {
   const graded = rows.filter((row) => row.rankGrade != null);
   if (graded.length === 0) return null;
 
@@ -132,7 +134,7 @@ function weightedRankAverage(rows: GradeRow[]): number | null {
   return Math.round((totalPoints / totalCredits) * 100) / 100;
 }
 
-function formatGradeBlock(rows: GradeRow[]): string | null {
+function formatGradeBlock(rows: ParsedGradeRow[]): string | null {
   const graded = rows.filter((row) => row.rankGrade != null);
   if (graded.length < 2) return null;
 
@@ -173,17 +175,49 @@ function formatGradeBlock(rows: GradeRow[]): string | null {
   ].join("\n");
 }
 
+function isExtractIncomplete(
+  merged: ParsedGradeRow[],
+  ocrText: string
+): boolean {
+  const estimated = estimateGradeRowCountInText(ocrText);
+  if (estimated < 3) return false;
+
+  const graded = merged.filter((row) => row.rankGrade != null);
+  if (graded.length < estimated * 0.85) return true;
+
+  // 학기별 과목 수가 지나치게 적으면 (1학기 3과목 미만 등)
+  const bySemester = new Map<string, number>();
+  for (const row of graded) {
+    const sem = row.semester;
+    bySemester.set(sem, (bySemester.get(sem) ?? 0) + 1);
+  }
+  for (const count of bySemester.values()) {
+    if (count > 0 && count < 4 && estimated >= 8) return true;
+  }
+
+  return false;
+}
+
 async function callGradeExtract(
   apiKey: string,
   ocrText: string,
-  signal: AbortSignal
-): Promise<GradeRow[] | null> {
+  signal: AbortSignal,
+  options?: { retryForMissing?: boolean; currentCount?: number; estimatedCount?: number }
+): Promise<ParsedGradeRow[] | null> {
   const models = getOcrModelCandidates();
-  const userText = [
-    "아래 OCR 텍스트에서 교과 성적표 rows만 JSON으로 추출하세요.",
-    "",
-    ocrText.slice(0, 120_000),
-  ].join("\n");
+  const userParts = ["아래 OCR 텍스트에서 교과 성적표 rows만 JSON으로 추출하세요."];
+
+  if (options?.retryForMissing) {
+    userParts.push(
+      "",
+      `【중요 — 누락 보완】 이전 추출에서 과목이 빠졌습니다.`,
+      `현재 ${options.currentCount ?? 0}과목 / OCR에서 보이는 성적 행 약 ${options.estimatedCount ?? "?"}건.`,
+      "공통국어1·공통수학1 등 빠진 과목이 없도록 **모든** 성적표 행을 rows에 포함하세요."
+    );
+  }
+
+  userParts.push("", ocrText.slice(0, 120_000));
+  const userText = userParts.join("\n");
 
   for (let modelIndex = 0; modelIndex < models.length; modelIndex++) {
     const model = models[modelIndex]!;
@@ -194,7 +228,7 @@ async function callGradeExtract(
         includeTemperature: profile.includeTemperature,
         includeSeed: profile.includeSeed,
         includeReasoningEffort: false,
-        maxOutputTokens: 4096,
+        maxOutputTokens: 8192,
       });
 
       if (profile.includeJsonFormat) {
@@ -241,6 +275,38 @@ async function callGradeExtract(
   return null;
 }
 
+async function extractAllGradeRows(
+  apiKey: string,
+  ocrText: string,
+  signal: AbortSignal
+): Promise<ParsedGradeRow[] | null> {
+  const regexRows = parseGradesFromOcrText(ocrText);
+  const llmRows = (await callGradeExtract(apiKey, ocrText, signal)) ?? [];
+
+  let merged = mergeGradeRows(regexRows, llmRows);
+
+  const estimated = estimateGradeRowCountInText(ocrText);
+  if (isExtractIncomplete(merged, ocrText)) {
+    const retryRows = await callGradeExtract(apiKey, ocrText, signal, {
+      retryForMissing: true,
+      currentCount: merged.filter((r) => r.rankGrade != null).length,
+      estimatedCount: estimated,
+    });
+    if (retryRows?.length) {
+      merged = mergeGradeRows(merged, retryRows);
+    }
+  }
+
+  const graded = merged.filter((row) => row.rankGrade != null);
+  if (graded.length >= 2) return merged;
+
+  if (regexRows.filter((r) => r.rankGrade != null).length >= 2) {
+    return regexRows;
+  }
+
+  return null;
+}
+
 /** OCR 텍스트에서 성적표를 구조화 추출 후 코드로 가중평균·환산 (입력마다 성적 수치 안정화) */
 export async function buildVerifiedGradeBlock(
   apiKey: string,
@@ -250,7 +316,7 @@ export async function buildVerifiedGradeBlock(
   if (!ocrText.trim()) return null;
   if (!/석차등급|석차\s*[1-9]|등급/.test(ocrText)) return null;
 
-  const rows = await callGradeExtract(apiKey, ocrText, signal);
+  const rows = await extractAllGradeRows(apiKey, ocrText, signal);
   if (!rows) return null;
 
   return formatGradeBlock(rows);

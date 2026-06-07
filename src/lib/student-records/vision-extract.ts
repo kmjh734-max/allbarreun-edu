@@ -177,7 +177,9 @@ async function extractSinglePage(
   const userText = [
     `학생: ${studentName}`,
     `학생부 페이지 ${pageNum} (총 ${totalPages}페이지 중)`,
-    "이 페이지 내용을 보이는 그대로 전사해 주세요. 성적 숫자(석차등급·학점)는 절대 수정하지 마세요.",
+    "이 페이지 내용을 보이는 그대로 전사해 주세요.",
+    "교과학습발달상황(성적표)이 있으면 표의 모든 과목 행을 빠짐없이 한 줄씩 적으세요 (공통국어1·공통수학1 등 포함).",
+    "성적 숫자(석차등급·학점)는 절대 수정하지 마세요.",
     "출력 시작: === 학생부 페이지 N 전사 ===",
   ].join("\n");
 
@@ -216,6 +218,7 @@ async function extractPageBatch(
     `학생: ${studentName}`,
     `학생부 페이지 ${pageNums.join(", ")} (총 ${totalPages}페이지 중)`,
     "각 페이지를 순서대로 그대로 전사하고, 페이지마다 === 학생부 페이지 N 전사 === 로 구분하세요.",
+    "성적표는 과목마다 별도 행으로 빠짐없이 전사하세요.",
   ].join("\n");
 
   for (const detail of ["high"] as const) {
