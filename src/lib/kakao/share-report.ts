@@ -2,7 +2,6 @@ import { LOGO_SRC } from "@/lib/branding";
 import {
   ensureKakaoSdkReady,
   isKakaoShareConfigured,
-  loadKakaoSdk,
 } from "@/lib/kakao/kakao-init";
 import { buildKakaoPasteMessage } from "@/lib/kakao/paste-message";
 import {

@@ -10,7 +10,7 @@ export function generateShareToken(): string {
  * 공유 링크 절대 URL 베이스
  * NEXT_PUBLIC_SITE_URL → SITE_URL(academyConfig) 순. 요청 Host 로는 만들지 않음.
  */
-export function resolveShareBaseUrl(_request?: Request): string {
+export function resolveShareBaseUrl(): string {
   const fromEnv = process.env.NEXT_PUBLIC_SITE_URL?.trim();
   if (fromEnv) return fromEnv.replace(/\/$/, "");
   return SITE_URL.replace(/\/$/, "");
