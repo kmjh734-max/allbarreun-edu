@@ -1,4 +1,9 @@
 import { LOGO_SRC } from "@/lib/branding";
+import {
+  ensureKakaoSdkReady,
+  isKakaoShareConfigured,
+  loadKakaoSdk,
+} from "@/lib/kakao/kakao-init";
 import { buildKakaoPasteMessage } from "@/lib/kakao/paste-message";
 import {
   KAKAO_PRODUCT_LINK_HINT,
@@ -6,31 +11,13 @@ import {
   validateShareUrlForKakao,
 } from "@/lib/kakao/share-url";
 
-export const KAKAO_SDK_URL =
-  "https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js";
+export {
+  ensureKakaoSdkReady,
+  isKakaoShareConfigured,
+  loadKakaoSdk as loadKakaoSdkForReports,
+} from "@/lib/kakao/kakao-init";
 
-type KakaoShareApi = {
-  isInitialized: () => boolean;
-  init: (key: string) => void;
-  Share: {
-    sendDefault: (settings: Record<string, unknown>) => void;
-    sendScrap: (settings: { requestUrl: string }) => void;
-  };
-};
-
-declare global {
-  interface Window {
-    Kakao?: KakaoShareApi;
-  }
-}
-
-let sdkLoadPromise: Promise<void> | null = null;
-
-export function isKakaoShareConfigured(): boolean {
-  return Boolean(process.env.NEXT_PUBLIC_KAKAO_JAVASCRIPT_KEY?.trim());
-}
-
-function getAbsoluteLogoUrl(shareUrl: string): string {
+export function getAbsoluteLogoUrl(shareUrl: string): string {
   try {
     const origin = new URL(shareUrl).origin;
     return `${origin}${LOGO_SRC}`;
@@ -40,63 +27,6 @@ function getAbsoluteLogoUrl(shareUrl: string): string {
     }
     return "";
   }
-}
-
-/** 리포트 화면 마운트 시 SDK 미리 로드 (선택) */
-export function loadKakaoSdkForReports(): Promise<void> {
-  return loadKakaoSdk();
-}
-
-function loadKakaoSdk(): Promise<void> {
-  if (typeof window === "undefined") {
-    return Promise.reject(new Error("browser only"));
-  }
-  if (window.Kakao?.isInitialized?.()) return Promise.resolve();
-  if (window.Kakao) return Promise.resolve();
-
-  if (sdkLoadPromise) return sdkLoadPromise;
-
-  sdkLoadPromise = new Promise((resolve, reject) => {
-    const existing = document.querySelector(
-      `script[src="${KAKAO_SDK_URL}"]`
-    ) as HTMLScriptElement | null;
-
-    if (existing) {
-      if (existing.getAttribute("data-loaded") === "true") {
-        resolve();
-        return;
-      }
-      existing.addEventListener("load", () => {
-        existing.setAttribute("data-loaded", "true");
-        resolve();
-      });
-      existing.addEventListener("error", () =>
-        reject(new Error("sdk load failed"))
-      );
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = KAKAO_SDK_URL;
-    script.async = true;
-    script.onload = () => {
-      script.setAttribute("data-loaded", "true");
-      resolve();
-    };
-    script.onerror = () => reject(new Error("sdk load failed"));
-    document.head.appendChild(script);
-  });
-
-  return sdkLoadPromise;
-}
-
-function ensureKakaoInit(): boolean {
-  const key = process.env.NEXT_PUBLIC_KAKAO_JAVASCRIPT_KEY?.trim();
-  if (!key || !window.Kakao) return false;
-  if (!window.Kakao.isInitialized()) {
-    window.Kakao.init(key);
-  }
-  return window.Kakao.isInitialized();
 }
 
 export interface KakaoShareParams {
@@ -190,20 +120,31 @@ function buildFeedPayload(
   };
 }
 
-function trySend(
-  fn: () => void
-): boolean {
+function formatKakaoShareError(error: unknown): string | null {
+  const text =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "";
+  if (!text) return null;
+  if (text.includes("4019")) {
+    return `카카오 공유 오류(4019): JavaScript 키와 Web 도메인 등록을 확인해 주세요. ${KAKAO_PRODUCT_LINK_HINT}`;
+  }
+  return text;
+}
+
+function trySend(fn: () => void): { ok: true } | { ok: false; error?: unknown } {
   try {
     fn();
-    return true;
-  } catch {
-    return false;
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error };
   }
 }
 
 /**
  * 카카오톡 공유 — text(본문 URL) → scrap → feed 순으로 시도.
- * feed 카드만 도착하고 링크가 안 눌리면 제품 링크 관리(Web) 도메인 등록 필요.
  */
 export async function shareReportViaKakao(
   params: KakaoShareParams
@@ -214,58 +155,63 @@ export async function shareReportViaKakao(
     return { ok: false, fallback: false, message: validation.warning };
   }
 
-  const key = process.env.NEXT_PUBLIC_KAKAO_JAVASCRIPT_KEY?.trim();
-  if (!key) {
+  if (!isKakaoShareConfigured()) {
     return {
       ok: false,
       fallback: false,
-      message: "카카오 JavaScript 키가 설정되어 있지 않습니다.",
+      message:
+        "NEXT_PUBLIC_KAKAO_JAVASCRIPT_KEY(자바스크립트 키)가 설정되어 있지 않습니다.",
     };
   }
 
-  try {
-    await loadKakaoSdk();
-    if (!ensureKakaoInit()) {
-      return copyFallback(
-        shareUrl,
-        "카카오 SDK 초기화에 실패했습니다. 리포트 링크를 복사했습니다."
-      );
-    }
-
-    const kakao = window.Kakao!;
-
-    // 1) 텍스트 메시지 — 본문에 URL 포함 (제품 링크 미등록 시에도 URL 탭 가능한 경우 많음)
-    if (trySend(() => kakao.Share.sendDefault(buildTextPayload(params)))) {
-      return { ok: true, method: "text" };
-    }
-
-    // 2) 스크랩 — OG 메타 기반 (공개 페이지에 og 태그 필요)
-    if (
-      trySend(() =>
-        kakao.Share.sendScrap({ requestUrl: shareUrl })
-      )
-    ) {
-      return { ok: true, method: "scrap" };
-    }
-
-    // 3) 피드 카드 (제품 링크 등록 시 카드·버튼 링크 활성화)
-    if (trySend(() => kakao.Share.sendDefault(buildFeedPayload(params, true)))) {
-      return { ok: true, method: "feed" };
-    }
-    if (trySend(() => kakao.Share.sendDefault(buildFeedPayload(params, false)))) {
-      return { ok: true, method: "feed" };
-    }
-
-    return copyFallback(
-      shareUrl,
-      `카카오톡보내기를 사용할 수 없어 리포트 링크를 복사했습니다. ${KAKAO_PRODUCT_LINK_HINT}`
-    );
-  } catch {
-    return copyFallback(
-      shareUrl,
-      `카카오톡보내기를 사용할 수 없어 리포트 링크를 복사했습니다. ${KAKAO_PRODUCT_LINK_HINT}`
-    );
+  const ready = await ensureKakaoSdkReady();
+  if (!ready.ok) {
+    return copyFallback(shareUrl, `${ready.message} 리포트 링크를 복사했습니다.`);
   }
+
+  const kakao = window.Kakao!;
+
+  const textResult = trySend(() =>
+    kakao.Share.sendDefault(buildTextPayload(params))
+  );
+  if (textResult.ok) {
+    return { ok: true, method: "text" };
+  }
+  const textErr = formatKakaoShareError(textResult.error);
+  if (textErr) {
+    return { ok: false, fallback: false, message: textErr };
+  }
+
+  const scrapResult = trySend(() =>
+    kakao.Share.sendScrap({ requestUrl: shareUrl })
+  );
+  if (scrapResult.ok) {
+    return { ok: true, method: "scrap" };
+  }
+
+  const feedImageResult = trySend(() =>
+    kakao.Share.sendDefault(buildFeedPayload(params, true))
+  );
+  if (feedImageResult.ok) {
+    return { ok: true, method: "feed" };
+  }
+
+  const feedResult = trySend(() =>
+    kakao.Share.sendDefault(buildFeedPayload(params, false))
+  );
+  if (feedResult.ok) {
+    return { ok: true, method: "feed" };
+  }
+
+  const feedErr = formatKakaoShareError(feedImageResult.error ?? feedResult.error);
+  if (feedErr) {
+    return { ok: false, fallback: false, message: feedErr };
+  }
+
+  return copyFallback(
+    shareUrl,
+    `카카오톡보내기를 사용할 수 없어 리포트 링크를 복사했습니다. ${KAKAO_PRODUCT_LINK_HINT}`
+  );
 }
 
 async function copyFallback(
