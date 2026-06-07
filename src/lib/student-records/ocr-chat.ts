@@ -6,19 +6,35 @@ export const PDF_OCR_MAX_OUTPUT_TOKENS = 16_384;
 /** Vision 배치 OCR 1회 출력 상한 */
 export const VISION_OCR_MAX_OUTPUT_TOKENS = 16_384;
 
-export const OCR_MODEL_PRIMARY = "gpt-5";
-export const OCR_MODEL_FALLBACK = "gpt-4o";
+/** Vision·PDF OCR 기본 (정확도 우선 — reasoning 모델은 전사 출력이 잘리기 쉬움) */
+export const OCR_MODEL_PRIMARY = "gpt-4.1";
+export const OCR_MODEL_SECONDARY = "gpt-4o";
+export const OCR_MODEL_FALLBACK = "gpt-4o-mini";
 
-/** OCR 모델 (미설정 시 gpt-5 → 실패 시 gpt-4o) */
+const DEFAULT_OCR_MODELS = [
+  OCR_MODEL_PRIMARY,
+  OCR_MODEL_SECONDARY,
+  OCR_MODEL_FALLBACK,
+];
+
+function uniqueModels(models: string[]): string[] {
+  const seen = new Set<string>();
+  return models.filter((model) => {
+    const key = model.trim();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/** OCR 모델 — env: `gpt-4.1` 또는 `gpt-4.1,gpt-4o` (미설정 시 4.1 → 4o → 4o-mini) */
 export function getOcrModelCandidates(): string[] {
   const configured = process.env.OPENAI_MODEL_STUDENT_RECORDS_OCR?.trim();
   if (configured) {
-    if (configured === OCR_MODEL_PRIMARY) {
-      return [OCR_MODEL_PRIMARY, OCR_MODEL_FALLBACK];
-    }
-    return [configured, OCR_MODEL_FALLBACK];
+    const fromEnv = configured.split(",").map((m) => m.trim()).filter(Boolean);
+    return uniqueModels([...fromEnv, OCR_MODEL_FALLBACK]);
   }
-  return [OCR_MODEL_PRIMARY, OCR_MODEL_FALLBACK];
+  return DEFAULT_OCR_MODELS;
 }
 
 export function buildOcrChatBody(
@@ -27,16 +43,15 @@ export function buildOcrChatBody(
   content: unknown,
   options?: {
     includeTemperature?: boolean;
+    /** OCR 전사는 reasoning 비활성 — 출력 토큰을 전사에만 사용 */
     includeReasoningEffort?: boolean;
     maxOutputTokens?: number;
   }
 ): Record<string, unknown> {
-  const includeTemperature = options?.includeTemperature ?? !isGpt5FamilyModel(model);
-  const includeReasoningEffort =
-    options?.includeReasoningEffort ?? isGpt5FamilyModel(model);
-  const maxOut =
-    options?.maxOutputTokens ??
-    (isGpt5FamilyModel(model) ? PDF_OCR_MAX_OUTPUT_TOKENS : PDF_OCR_MAX_OUTPUT_TOKENS);
+  const includeTemperature =
+    options?.includeTemperature ?? !isGpt5FamilyModel(model);
+  const includeReasoningEffort = options?.includeReasoningEffort ?? false;
+  const maxOut = options?.maxOutputTokens ?? PDF_OCR_MAX_OUTPUT_TOKENS;
 
   const body: Record<string, unknown> = {
     model,
@@ -47,13 +62,13 @@ export function buildOcrChatBody(
   };
 
   if (includeTemperature) {
-    body.temperature = 0.2;
+    body.temperature = 0.1;
   }
 
   if (isGpt5FamilyModel(model)) {
     body.max_completion_tokens = maxOut;
     if (includeReasoningEffort) {
-      body.reasoning_effort = "low";
+      body.reasoning_effort = "minimal";
     }
   } else {
     body.max_tokens = maxOut;

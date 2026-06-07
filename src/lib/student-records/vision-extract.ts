@@ -117,7 +117,7 @@ async function callVisionText(
         body: JSON.stringify(
           buildOcrChatBody(model, system, contentWithDetail, {
             includeTemperature: profile.includeTemperature,
-            includeReasoningEffort: isGpt5FamilyModel(model),
+            includeReasoningEffort: false,
             maxOutputTokens: VISION_OCR_MAX_OUTPUT_TOKENS,
           })
         ),
@@ -175,7 +175,7 @@ async function extractSinglePage(
     "출력 시작: === 학생부 페이지 N 전사 ===",
   ].join("\n");
 
-  for (const detail of ["high", "auto"] as const) {
+  for (const detail of ["high"] as const) {
     const content: ContentPart[] = [
       { type: "text", text: userText },
       { type: "image_url", image_url: { url: imageUrl, detail } },
@@ -212,7 +212,7 @@ async function extractPageBatch(
     "각 페이지를 순서대로 전사하고, 페이지마다 === 학생부 페이지 N 전사 === 로 구분하세요.",
   ].join("\n");
 
-  for (const detail of ["high", "auto"] as const) {
+  for (const detail of ["high"] as const) {
     const content: ContentPart[] = [{ type: "text", text: userText }];
     for (const url of imageUrls) {
       content.push({ type: "image_url", image_url: { url, detail } });

@@ -43,7 +43,7 @@ type RequestProfile = {
 function defaultProfile(model: string): RequestProfile {
   return {
     includeTemperature: !isGpt5FamilyModel(model),
-    includeReasoningEffort: isGpt5FamilyModel(model),
+    includeReasoningEffort: false,
   };
 }
 
@@ -257,9 +257,17 @@ async function ocrSinglePdf(
 ): Promise<string | null> {
   const buffer = pdfDataUrlToBuffer(pdf.dataUrl);
 
-  let text = await ocrViaInlinePdf(apiKey, pdf, studentName, signal);
+  // 1) 고해상도 페이지 이미지 + Vision (스캔 PDF에 가장 정확)
+  let text = await ocrViaRenderedPages(
+    apiKey,
+    buffer,
+    pdf.name,
+    studentName,
+    signal
+  );
   if (text && isReliableStudentRecordExtract(text)) return text;
 
+  // 2) OpenAI Files API 업로드
   text = await ocrViaUploadedFile(
     apiKey,
     buffer,
@@ -269,16 +277,11 @@ async function ocrSinglePdf(
   );
   if (text && isReliableStudentRecordExtract(text)) return text;
 
-  text = await ocrViaRenderedPages(
-    apiKey,
-    buffer,
-    pdf.name,
-    studentName,
-    signal
-  );
+  // 3) 인라인 PDF (소용량·텍스트 PDF)
+  text = await ocrViaInlinePdf(apiKey, pdf, studentName, signal);
   if (text && isReliableStudentRecordExtract(text)) return text;
 
-  return text;
+  return text ?? null;
 }
 
 export async function extractTextFromPdfDocuments(

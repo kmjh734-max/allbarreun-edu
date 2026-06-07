@@ -3,7 +3,7 @@ import {
   STUDENT_RECORD_PAGE_JPEG_TARGET_BYTES,
 } from "@/lib/student-records/limits";
 
-const MAX_PAGE_EDGE = 1600;
+const MAX_PAGE_EDGE = 2400;
 
 export async function pdfFileToJpegFiles(
   file: File,
@@ -28,7 +28,7 @@ export async function pdfFileToJpegFiles(
     const page = await pdf.getPage(pageNum);
     const viewport = page.getViewport({ scale: 1 });
     const edgeScale = MAX_PAGE_EDGE / Math.max(viewport.width, viewport.height);
-    const renderScale = Math.min(2.0, Math.max(1.1, edgeScale));
+    const renderScale = Math.min(2.5, Math.max(1.25, edgeScale));
     const scaled = page.getViewport({ scale: renderScale });
 
     const canvas = document.createElement("canvas");
@@ -42,16 +42,16 @@ export async function pdfFileToJpegFiles(
 
     await page.render({ canvasContext: ctx, viewport: scaled }).promise;
 
-    let quality = 0.85;
+    let quality = 0.92;
     let blob: Blob | null = null;
-    for (let attempt = 0; attempt < 6; attempt++) {
+    for (let attempt = 0; attempt < 8; attempt++) {
       blob = await new Promise<Blob | null>((resolve) => {
         canvas.toBlob(resolve, "image/jpeg", quality);
       });
       if (!blob) break;
       if (blob.size <= STUDENT_RECORD_PAGE_JPEG_TARGET_BYTES) break;
-      quality -= 0.08;
-      if (quality < 0.55) break;
+      quality -= 0.05;
+      if (quality < 0.68) break;
     }
 
     if (blob && blob.size > 8_000) {

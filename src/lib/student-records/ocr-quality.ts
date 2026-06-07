@@ -34,7 +34,7 @@ export function isReliableStudentRecordExtract(text: string): boolean {
   if (compact.length < 500) return false;
 
   const signals = body.match(RECORD_SIGNAL_PATTERN)?.length ?? 0;
-  if (signals < 2) return false;
+  if (signals < 1 && compact.length < 800) return false;
 
   const failed = (body.match(/\[이 구간 판독 실패\]|\[OCR 실패\]|\[판독불가\]/g) ?? [])
     .length;
