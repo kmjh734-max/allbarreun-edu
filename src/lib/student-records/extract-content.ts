@@ -1,8 +1,5 @@
 import { STUDENT_RECORD_ANALYSIS_TIMEOUT_MS } from "@/lib/student-records/limits";
-import {
-  isReliableStudentRecordExtract,
-  stripOcrPlaceholders,
-} from "@/lib/student-records/ocr-quality";
+import { stripOcrPlaceholders } from "@/lib/student-records/ocr-quality";
 import { extractTextFromPdfDocuments } from "@/lib/student-records/pdf-ocr";
 import type { AnalyzeStudentRecordInput } from "@/lib/student-records/types";
 import {
@@ -70,8 +67,13 @@ export async function extractStudentRecordContent(
 
     const combined = chunks.join("\n\n");
     const substantive = stripOcrPlaceholders(combined);
+    const compact = substantive.replace(/\s+/g, "");
 
-    if (!isReliableStudentRecordExtract(combined)) {
+    // 이 API는 1~2페이지 묶음 단위로 호출되므로 "학생부 전체" 신뢰도 기준을
+    // 적용하면 내용이 적은 페이지(표지·성적표 등)가 통째로 실패한다.
+    // 여기서는 읽을 수 있는 텍스트 존재 여부만 검증하고,
+    // 전체 신뢰도는 클라이언트가 합산 텍스트로 최종 검증한다.
+    if (compact.length < 80) {
       const hadImages = input.imageDataUrls.length > 0;
       const hadPdf = input.pdfDocuments.length > 0;
       const ocrStats = hadImages ? countSuccessfulOcrPages(combined) : null;
