@@ -7,6 +7,7 @@ import {
   STUDENT_RECORD_MAX_PDF_BYTES,
   STUDENT_RECORD_MAX_PDF_PAGES,
   STUDENT_RECORD_MAX_TOTAL_BYTES,
+  STUDENT_RECORD_PREPARED_UPLOAD_BUDGET,
 } from "@/lib/student-records/limits";
 
 export {
@@ -15,14 +16,33 @@ export {
   STUDENT_RECORD_MAX_TOTAL_BYTES,
 } from "@/lib/student-records/limits";
 
+/**
+ * 요청당 장수·용량 예산에 맞춰 파일을 묶음으로 분할.
+ * 전체 합계가 아닌 묶음(요청) 단위로만 서버 한도를 지키면 되므로
+ * 전체 업로드 용량에는 제한이 없다.
+ */
 export function chunkStudentRecordFiles(
   files: File[],
-  chunkSize = STUDENT_RECORD_EXTRACT_CHUNK_PAGES
+  chunkSize = STUDENT_RECORD_EXTRACT_CHUNK_PAGES,
+  maxChunkBytes = STUDENT_RECORD_PREPARED_UPLOAD_BUDGET
 ): File[][] {
   const chunks: File[][] = [];
-  for (let i = 0; i < files.length; i += chunkSize) {
-    chunks.push(files.slice(i, i + chunkSize));
+  let current: File[] = [];
+  let currentBytes = 0;
+
+  for (const file of files) {
+    const overflow =
+      current.length >= chunkSize ||
+      (current.length > 0 && currentBytes + file.size > maxChunkBytes);
+    if (overflow) {
+      chunks.push(current);
+      current = [];
+      currentBytes = 0;
+    }
+    current.push(file);
+    currentBytes += file.size;
   }
+  if (current.length > 0) chunks.push(current);
   return chunks;
 }
 
@@ -34,11 +54,8 @@ export function formatBytes(bytes: number): string {
 
 export function validateStudentRecordFiles(files: File[]): string | null {
   let imageCount = 0;
-  let total = 0;
 
   for (const file of files) {
-    total += file.size;
-
     if (isPdfUpload(file)) {
       if (file.size > STUDENT_RECORD_MAX_PDF_BYTES) {
         return `PDF는 ${formatBytes(STUDENT_RECORD_MAX_PDF_BYTES)} 이하만 업로드할 수 있습니다. (${file.name})`;
@@ -58,10 +75,6 @@ export function validateStudentRecordFiles(files: File[]): string | null {
     }
 
     return "지원 형식: PDF, JPG/PNG/WEBP 이미지입니다.";
-  }
-
-  if (total > STUDENT_RECORD_MAX_TOTAL_BYTES) {
-    return `전체 업로드 용량이 ${formatBytes(STUDENT_RECORD_MAX_TOTAL_BYTES)}를 초과합니다. 파일 수·용량을 줄여 주세요.`;
   }
 
   return null;

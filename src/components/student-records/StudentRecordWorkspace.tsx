@@ -14,7 +14,6 @@ import {
   prepareStudentRecordFiles,
   readStudentRecordApiResponse,
   STUDENT_RECORD_MAX_PDF_PAGES,
-  STUDENT_RECORD_MAX_TOTAL_BYTES,
   validatePreparedExtractChunk,
   validatePreparedStudentRecordFiles,
   validateStudentRecordFiles,
@@ -407,8 +406,8 @@ export function StudentRecordWorkspace({
           업로드하세요. 이미지는 장당 최대{" "}
           {formatBytes(STUDENT_RECORD_MAX_IMAGE_BYTES)}까지 허용합니다. 스캔 PDF는
           고해상도 변환 후 OpenAI Vision(gpt-4o)으로 OCR합니다(최대{" "}
-          {STUDENT_RECORD_MAX_PDF_PAGES}페이지). 전체 용량은 약{" "}
-          {formatBytes(STUDENT_RECORD_MAX_TOTAL_BYTES)} 이하를 권장합니다.
+          {STUDENT_RECORD_MAX_PDF_PAGES}페이지). 파일은 자동으로 나눠
+          업로드되므로 전체 용량 제한은 없습니다.
         </p>
         <textarea
           className="ui-input min-h-[220px] font-mono text-xs leading-relaxed"
