@@ -205,6 +205,36 @@ export async function prepareStudentRecordFiles(
   return prepared;
 }
 
+/**
+ * 일시적 서버 오류(5xx)·네트워크 오류 시 자동 재시도.
+ * 미들웨어/플랫폼 단계의 산발적 500이 사용자에게 그대로 노출되지 않게 한다.
+ */
+export async function fetchStudentRecordApi(
+  input: RequestInfo,
+  init: RequestInit,
+  retries = 2
+): Promise<Response> {
+  let attempt = 0;
+  for (;;) {
+    try {
+      const res = await fetch(input, init);
+      if (res.status >= 500 && attempt < retries) {
+        attempt += 1;
+        await new Promise((r) => setTimeout(r, 1200 * attempt));
+        continue;
+      }
+      return res;
+    } catch (e) {
+      if (attempt < retries) {
+        attempt += 1;
+        await new Promise((r) => setTimeout(r, 1200 * attempt));
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
 export async function readStudentRecordApiResponse<T extends { ok?: boolean; message?: string }>(
   res: Response
 ): Promise<{ data: T | null; error: string | null }> {

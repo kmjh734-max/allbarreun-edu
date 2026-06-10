@@ -10,6 +10,7 @@ import type {
 } from "@/lib/reports/types";
 import {
   chunkStudentRecordFiles,
+  fetchStudentRecordApi,
   formatBytes,
   prepareStudentRecordFiles,
   readStudentRecordApiResponse,
@@ -205,10 +206,13 @@ export function StudentRecordWorkspace({
       };
 
       const postExtract = async (formData: FormData) => {
-        const extractRes = await fetch("/api/student-records/extract", {
-          method: "POST",
-          body: formData,
-        });
+        const extractRes = await fetchStudentRecordApi(
+          "/api/student-records/extract",
+          {
+            method: "POST",
+            body: formData,
+          }
+        );
         const { data, error } =
           await readStudentRecordApiResponse<ExtractApiResult>(extractRes);
         if (error) throw new Error(error);
@@ -316,16 +320,21 @@ export function StudentRecordWorkspace({
 
       updateProgress("2/2 입학사정관 보고서 생성 중…", PROGRESS_GENERATE_END);
 
-      const generateRes = await fetch("/api/student-records/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          studentId: resolvedStudentId,
-          studentName: resolvedStudentName,
-          text: combinedExtractedText,
-          analysisInstructions: analysisInstructions.trim(),
-        }),
-      });
+      const generateRes = await fetchStudentRecordApi(
+        "/api/student-records/generate",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            studentId: resolvedStudentId,
+            studentName: resolvedStudentName,
+            text: combinedExtractedText,
+            analysisInstructions: analysisInstructions.trim(),
+          }),
+        },
+        // 보고서 생성은 1회 2~3분 걸릴 수 있어 재시도는 1회만
+        1
+      );
       const { data: generated, error: generateError } =
         await readStudentRecordApiResponse<{
           ok: boolean;
