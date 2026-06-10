@@ -1,3 +1,4 @@
+import { applyAcademyBrandingToReportHtml } from "@/lib/student-records/report-branding";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export interface SharedStudentRecordPayload {
@@ -36,7 +37,7 @@ export async function lookupSharedStudentRecord(
       status: "ok",
       payload: {
         studentName: (data.student_name as string) ?? "학생",
-        html: data.html as string,
+        html: applyAcademyBrandingToReportHtml(data.html as string),
         generatedAt: data.generated_at as string,
         expiresAt,
       },

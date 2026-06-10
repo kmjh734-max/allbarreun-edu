@@ -1,4 +1,5 @@
 import { extractHtmlFromModelOutput } from "@/lib/student-records/extract-html";
+import { applyAcademyBrandingToReportHtml } from "@/lib/student-records/report-branding";
 import { buildVerifiedGradeBlock } from "@/lib/student-records/grade-extract";
 import { STUDENT_RECORD_ANALYSIS_TIMEOUT_MS } from "@/lib/student-records/limits";
 import {
@@ -189,7 +190,7 @@ export async function generateStudentRecordReport(
           break;
         }
 
-        return { ok: true, html };
+        return { ok: true, html: applyAcademyBrandingToReportHtml(html) };
       }
     }
 

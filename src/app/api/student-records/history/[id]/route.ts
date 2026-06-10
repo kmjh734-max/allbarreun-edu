@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/auth/get-profile";
+import { applyAcademyBrandingToReportHtml } from "@/lib/student-records/report-branding";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -44,7 +45,7 @@ export async function GET(_request: Request, context: RouteContext) {
         id: data.id as string,
         studentId: (data.student_id as string | null) ?? null,
         studentName: (data.student_name as string) ?? "학생",
-        html: data.html as string,
+        html: applyAcademyBrandingToReportHtml(data.html as string),
         generatedAt: data.generated_at as string,
       },
     });
