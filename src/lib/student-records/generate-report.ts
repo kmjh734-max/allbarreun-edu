@@ -10,12 +10,13 @@ import {
   isUnsupportedTemperatureError,
 } from "@/lib/student-records/model";
 import {
+  isDefaultFullAnalysisInstructions,
   STUDENT_RECORD_SIMPLE_SYSTEM_PROMPT,
 } from "@/lib/student-records/simple-analysis-prompt";
 import { STUDENT_RECORD_ANALYSIS_SYSTEM_PROMPT } from "@/lib/student-records/system-prompt";
 
 export type GenerateStudentRecordOptions = {
-  /** 비어 있지 않으면 간단 분석 모드(성적 블록 생략) + 사용자 지침 우선 */
+  /** 기본 종합 분석 문구·빈 값이면 성적 포함 상세 모드. 그 외는 맞춤(간단) 분석 */
   analysisInstructions?: string;
 };
 
@@ -74,7 +75,8 @@ export async function generateStudentRecordReport(
   );
 
   const instructions = options.analysisInstructions?.trim() ?? "";
-  const useSimpleMode = instructions.length > 0;
+  const useSimpleMode =
+    instructions.length > 0 && !isDefaultFullAnalysisInstructions(instructions);
 
   let reportSourceText = text.trim();
   if (!useSimpleMode) {
@@ -122,7 +124,7 @@ export async function generateStudentRecordReport(
         "□ 성적(정량) vs 자가진단(정성) 분리, 교과전형 vs 학종 분리",
         "□ <!DOCTYPE html> ~ </html> HTML만 출력",
         "□ 섹션 6 HTML 디자인: Hero 그라데이션·카드·타임라인·2열·뱃지·게이지 등 프리미엄 UI 필수 (간소화 금지)",
-        "□ 섹션 1~18 전체 포함 (축약 금지)",
+        "□ 섹션 1~18 전체 포함 (축약·생략 금지) — 자료 없으면 「제출 자료에 해당 내용 없음」 명시",
         "",
         "=== 학생부 원문 ===",
         reportSourceText,

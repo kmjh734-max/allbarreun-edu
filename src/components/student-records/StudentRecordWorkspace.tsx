@@ -56,7 +56,6 @@ export function StudentRecordWorkspace({
   const [loginQuery, setLoginQuery] = useState("");
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [manualStudentName, setManualStudentName] = useState("");
-  const [text, setText] = useState("");
   const [analysisInstructions, setAnalysisInstructions] = useState(
     DEFAULT_ANALYSIS_INSTRUCTIONS
   );
@@ -107,8 +106,8 @@ export function StudentRecordWorkspace({
   }, [loadStudents, hasInitialLists, classId, nameQuery, loginQuery]);
 
   async function runAnalysis() {
-    if (!text.trim() && files.length === 0) {
-      setError("학생부 텍스트를 붙여넣거나 PDF/이미지를 업로드해 주세요.");
+    if (files.length === 0) {
+      setError("분석할 PDF 또는 이미지를 업로드해 주세요.");
       return;
     }
 
@@ -123,7 +122,6 @@ export function StudentRecordWorkspace({
     setResult(null);
     updateProgress("분석 준비 중…", 0);
     try {
-      const pastedText = text.trim();
       const pdfFiles = files.filter(isPdfUpload);
       const directImageFiles = files.filter((file) => !isPdfUpload(file));
       let resolvedStudentId: string | null = null;
@@ -176,16 +174,9 @@ export function StudentRecordWorkspace({
         const ocrTexts: string[] = [];
 
         if (imageChunks.length === 0) {
-          const formData = buildFormData();
-          formData.set("text", pastedText);
-          updateProgress("1/2 학생부 자료 읽는 중…", 40);
-          const extracted = await postExtract(formData);
-          if (!extracted?.ok || !extracted.text || !extracted.studentName) {
-            throw new Error(extracted?.message ?? "자료 읽기에 실패했습니다.");
-          }
-          resolvedStudentId = extracted.studentId ?? null;
-          resolvedStudentName = extracted.studentName;
-          ocrTexts.push(extracted.text);
+          throw new Error(
+            "업로드한 파일에서 분석할 이미지를 찾지 못했습니다. 파일을 확인해 주세요."
+          );
         } else {
           const ocrSpan = PROGRESS_OCR_END - PROGRESS_PREP_END;
 
@@ -195,9 +186,6 @@ export function StudentRecordWorkspace({
             if (chunkError) throw new Error(chunkError);
 
             const formData = buildFormData();
-            if (chunkIndex === 0 && pastedText) {
-              formData.set("text", pastedText);
-            }
             for (const file of chunk) {
               formData.append("files", file);
             }
@@ -254,7 +242,7 @@ export function StudentRecordWorkspace({
         combinedExtractedText = ocrTexts.join("\n\n");
         if (!isReliableStudentRecordExtract(combinedExtractedText)) {
           throw new Error(
-            "학생부 OCR 결과가 충분하지 않습니다. 스캔 선명도를 확인하거나 텍스트를 직접 붙여넣어 주세요."
+            "학생부 OCR 결과가 충분하지 않습니다. 스캔 선명도를 확인한 뒤 다시 업로드해 주세요."
           );
         }
       }
@@ -402,19 +390,13 @@ export function StudentRecordWorkspace({
           2. 학생부 자료 입력
         </h2>
         <p className="text-xs text-slate-500">
-          성적표·세특·창체·행특 텍스트를 붙여넣거나, PDF·이미지(JPG/PNG)를
-          업로드하세요. 이미지는 장당 최대{" "}
+          성적표·세특·창체·행특이 담긴 PDF·이미지(JPG/PNG)를 업로드하세요.
+          이미지는 장당 최대{" "}
           {formatBytes(STUDENT_RECORD_MAX_IMAGE_BYTES)}까지 허용합니다. 스캔 PDF는
           고해상도 변환 후 OpenAI Vision(gpt-4o)으로 OCR합니다(최대{" "}
           {STUDENT_RECORD_MAX_PDF_PAGES}페이지). 파일은 자동으로 나눠
           업로드되므로 전체 용량 제한은 없습니다.
         </p>
-        <textarea
-          className="ui-input min-h-[220px] font-mono text-xs leading-relaxed"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="학생부 원문을 붙여넣으세요..."
-        />
         <input
           type="file"
           className="block w-full text-sm text-slate-600"
@@ -436,9 +418,8 @@ export function StudentRecordWorkspace({
           3. 분석 요청 (선택)
         </h2>
         <p className="text-xs text-slate-500">
-          AI에게 어떻게 분석할지 적어 주세요. 기본값은 성적을 제외하고 기록
-          내용만 분석하도록 되어 있습니다. 비우면 상세 분석(성적·대학 추천
-          포함) 모드로 생성됩니다.
+          기본값은 성적·등급 산출, 대학 추천, 세특·행특·창체까지 포함한 종합
+          분석입니다. 일부만 분석하려면 요청 내용을 수정해 주세요.
         </p>
         <textarea
           className="ui-input min-h-[120px] text-sm leading-relaxed"
