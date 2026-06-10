@@ -16,17 +16,29 @@ export async function GET() {
     }
 
     const admin = createAdminClient();
-    let query = admin
-      .from("student_record_analyses")
-      .select("id, student_name, generated_at, created_at")
-      .order("created_at", { ascending: false })
-      .limit(100);
 
-    if (profile.role === "teacher") {
-      query = query.eq("created_by", profile.id);
+    const fetchList = (columns: string) => {
+      let query = admin
+        .from("student_record_analyses")
+        .select(columns)
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (profile.role === "teacher") {
+        query = query.eq("created_by", profile.id);
+      }
+      return query;
+    };
+
+    let { data, error } = await fetchList(
+      "id, student_name, school, generated_at, created_at"
+    );
+    // school 컬럼 미적용(마이그레이션 전) 환경 호환
+    if (error && /school/i.test(error.message)) {
+      ({ data, error } = await fetchList(
+        "id, student_name, generated_at, created_at"
+      ));
     }
 
-    const { data, error } = await query;
     if (error) {
       console.error("[student-records/history] list failed:", error.message);
       return NextResponse.json(
@@ -35,13 +47,22 @@ export async function GET() {
       );
     }
 
+    type Row = {
+      id: string;
+      student_name: string | null;
+      school?: string | null;
+      generated_at: string;
+      created_at: string;
+    };
+
     return NextResponse.json({
       ok: true,
-      records: (data ?? []).map((row) => ({
-        id: row.id as string,
-        studentName: (row.student_name as string) ?? "학생",
-        generatedAt: row.generated_at as string,
-        createdAt: row.created_at as string,
+      records: ((data ?? []) as unknown as Row[]).map((row) => ({
+        id: row.id,
+        studentName: row.student_name ?? "학생",
+        school: row.school ?? null,
+        generatedAt: row.generated_at,
+        createdAt: row.created_at,
       })),
     });
   } catch (e) {

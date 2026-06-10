@@ -44,6 +44,7 @@ type ExtractApiResult = {
 type HistoryRecord = {
   id: string;
   studentName: string;
+  school: string | null;
   generatedAt: string;
   createdAt: string;
 };
@@ -354,7 +355,8 @@ export function StudentRecordWorkspace({
       updateProgress("보고서 생성 완료", 100);
       setResult({
         studentId: resolvedStudentId,
-        studentName: resolvedStudentName,
+        // 학생 미선택 시 서버가 학생부 본문에서 찾아낸 실제 이름 사용
+        studentName: generated.studentName ?? resolvedStudentName,
         html: generated.html,
         generatedAt: generated.generatedAt,
       });
@@ -553,7 +555,9 @@ export function StudentRecordWorkspace({
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-slate-900">
-                    {record.studentName}
+                    {record.school
+                      ? `${record.school} · ${record.studentName}`
+                      : record.studentName}
                   </p>
                   <p className="text-xs text-slate-500">
                     {new Date(record.generatedAt).toLocaleString("ko-KR")}

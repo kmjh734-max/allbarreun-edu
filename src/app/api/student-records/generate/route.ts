@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/auth/get-profile";
+import { extractStudentIdentityFromRecordText } from "@/lib/student-records/extract-identity";
 import { generateStudentRecordReport } from "@/lib/student-records/generate-report";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -42,16 +43,35 @@ export async function POST(request: Request) {
 
     const generatedAt = new Date().toISOString();
 
+    // 학생 미선택(placeholder) 시 학생부 본문에서 성명·학교를 보충
+    const identity = extractStudentIdentityFromRecordText(text);
+    const effectiveStudentName =
+      studentName !== "학생" ? studentName : identity.name ?? studentName;
+    const school = identity.school;
+
     // 분석 기록 저장 — 실패해도 보고서 응답은 정상 반환
     try {
       const admin = createAdminClient();
-      await admin.from("student_record_analyses").insert({
+      const row = {
         student_id: studentId,
-        student_name: studentName,
+        student_name: effectiveStudentName,
         html: result.html,
         generated_at: generatedAt,
         created_by: profile.id,
-      });
+      };
+      const { error } = await admin
+        .from("student_record_analyses")
+        .insert({ ...row, school });
+      if (error) {
+        console.error(
+          "[student-records/generate] history insert failed:",
+          error.message
+        );
+        // school 컬럼 미적용(마이그레이션 전) 환경에서도 기록은 남긴다
+        if (/school/i.test(error.message)) {
+          await admin.from("student_record_analyses").insert(row);
+        }
+      }
     } catch (e) {
       console.error("[student-records/generate] history insert failed:", e);
     }
@@ -59,7 +79,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       html: result.html,
-      studentName,
+      studentName: effectiveStudentName,
+      school,
       generatedAt,
     });
   } catch (e) {
