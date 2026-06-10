@@ -221,7 +221,7 @@ export function StudentRecordWorkspace({
       };
 
       if (!combinedExtractedText) {
-        updateProgress("PDF·이미지 준비 중… (고해상도 OCR)", 4);
+        updateProgress("준비 단계 · 업로드한 파일을 변환하고 있어요", 4);
         const preparedFiles = await prepareStudentRecordFiles(files, (label) => {
           if (label.startsWith("PDF 변환")) {
             const match = label.match(/(\d+)\/(\d+)/);
@@ -230,11 +230,14 @@ export function StudentRecordWorkspace({
               const total = Number(match[2]);
               const pct =
                 4 + (current / Math.max(total, 1)) * (PROGRESS_PREP_END - 4);
-              updateProgress(`PDF 변환 ${current}/${total}…`, pct);
+              updateProgress(
+                `준비 단계 · PDF를 페이지 이미지로 변환 중 (${current}/${total}페이지)`,
+                pct
+              );
               return;
             }
           }
-          updateProgress(label, 6);
+          updateProgress("준비 단계 · 업로드한 파일을 변환하고 있어요", 6);
         });
         const preparedError = validatePreparedStudentRecordFiles(preparedFiles);
         if (preparedError) {
@@ -266,11 +269,14 @@ export function StudentRecordWorkspace({
             if (!extracted?.ok || !extracted.text || !extracted.studentName) {
               throw new Error(
                 extracted?.message ??
-                  `${chunkIndex + 1}번째 OCR 묶음 처리에 실패했습니다.`
+                  `${chunkIndex + 1}번째 페이지 묶음 인식에 실패했습니다.`
               );
             }
             return extracted;
           };
+
+          const totalPages = preparedFiles.length;
+          let pagesDone = 0;
 
           for (
             let i = 0;
@@ -286,11 +292,14 @@ export function StudentRecordWorkspace({
               },
               (_, j) => i + j
             );
+            const batchPages = batchIndices.reduce(
+              (sum, idx) => sum + imageChunks[idx]!.length,
+              0
+            );
 
             updateProgress(
-              `1/2 이미지 OCR 중… ${i + 1}~${i + batchIndices.length}/${imageChunks.length}묶음`,
-              PROGRESS_PREP_END +
-                (i / imageChunks.length) * ocrSpan
+              `1단계 · 학생부 내용 읽는 중 (${pagesDone + 1}~${Math.min(pagesDone + batchPages, totalPages)}/${totalPages}페이지)`,
+              PROGRESS_PREP_END + (pagesDone / totalPages) * ocrSpan
             );
 
             const batchResults = await Promise.all(
@@ -303,10 +312,11 @@ export function StudentRecordWorkspace({
               ocrTexts.push(extracted.text!);
             }
 
+            pagesDone = Math.min(pagesDone + batchPages, totalPages);
+
             updateProgress(
-              `1/2 이미지 OCR 중… ${Math.min(i + batchIndices.length, imageChunks.length)}/${imageChunks.length}묶음 완료`,
-              PROGRESS_PREP_END +
-                ((i + batchIndices.length) / imageChunks.length) * ocrSpan
+              `1단계 · 학생부 내용 읽기 완료 (${pagesDone}/${totalPages}페이지)`,
+              PROGRESS_PREP_END + (pagesDone / totalPages) * ocrSpan
             );
           }
         }
@@ -319,23 +329,38 @@ export function StudentRecordWorkspace({
         }
       }
 
-      updateProgress("2/2 입학사정관 보고서 생성 중…", PROGRESS_GENERATE_END);
-
-      const generateRes = await fetchStudentRecordApi(
-        "/api/student-records/generate",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            studentId: resolvedStudentId,
-            studentName: resolvedStudentName,
-            text: combinedExtractedText,
-            analysisInstructions: analysisInstructions.trim(),
-          }),
-        },
-        // 보고서 생성은 1회 2~3분 걸릴 수 있어 재시도는 1회만
-        1
+      updateProgress(
+        "2단계 · AI가 분석 보고서를 작성 중이에요 (보통 1~3분 소요)",
+        PROGRESS_OCR_END + 3
       );
+
+      // 생성 단계는 1~3분 걸리므로 멈춰 보이지 않게 진행률을 천천히 올린다
+      const generateTicker = setInterval(() => {
+        setProgressPercent((p) =>
+          p < PROGRESS_GENERATE_END ? p + 1 : p
+        );
+      }, 5000);
+
+      let generateRes: Response;
+      try {
+        generateRes = await fetchStudentRecordApi(
+          "/api/student-records/generate",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              studentId: resolvedStudentId,
+              studentName: resolvedStudentName,
+              text: combinedExtractedText,
+              analysisInstructions: analysisInstructions.trim(),
+            }),
+          },
+          // 보고서 생성은 1회 2~3분 걸릴 수 있어 재시도는 1회만
+          1
+        );
+      } finally {
+        clearInterval(generateTicker);
+      }
       const { data: generated, error: generateError } =
         await readStudentRecordApiResponse<{
           ok: boolean;
