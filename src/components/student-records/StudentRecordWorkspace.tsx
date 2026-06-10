@@ -77,6 +77,8 @@ export function StudentRecordWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryRecord[]>([]);
   const [historyBusyId, setHistoryBusyId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
 
   const updateProgress = useCallback((label: string, percent: number) => {
     setProgressLabel(label);
@@ -139,6 +141,47 @@ export function StudentRecordWorkspace({
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "기록을 불러오지 못했습니다.");
+    } finally {
+      setHistoryBusyId(null);
+    }
+  }
+
+  function startEditingRecord(record: HistoryRecord) {
+    setEditingId(record.id);
+    setEditingTitle(
+      record.school
+        ? `${record.school} · ${record.studentName}`
+        : record.studentName
+    );
+  }
+
+  async function renameHistoryRecord(id: string) {
+    const title = editingTitle.trim();
+    if (!title) {
+      setError("제목을 입력해 주세요.");
+      return;
+    }
+    setHistoryBusyId(id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/student-records/history/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message ?? "제목 수정에 실패했습니다.");
+      }
+      setHistory((prev) =>
+        prev.map((r) =>
+          r.id === id ? { ...r, studentName: title, school: null } : r
+        )
+      );
+      setEditingId(null);
+      setEditingTitle("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "제목 수정에 실패했습니다.");
     } finally {
       setHistoryBusyId(null);
     }
@@ -578,34 +621,78 @@ export function StudentRecordWorkspace({
                 key={record.id}
                 className="flex flex-wrap items-center justify-between gap-2 py-2.5"
               >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-slate-900">
-                    {record.school
-                      ? `${record.school} · ${record.studentName}`
-                      : record.studentName}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {new Date(record.generatedAt).toLocaleString("ko-KR")}
-                  </p>
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  <button
-                    type="button"
-                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                    disabled={historyBusyId === record.id}
-                    onClick={() => void openHistoryRecord(record.id)}
-                  >
-                    {historyBusyId === record.id ? "불러오는 중…" : "열람"}
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50"
-                    disabled={historyBusyId === record.id}
-                    onClick={() => void deleteHistoryRecord(record.id)}
-                  >
-                    삭제
-                  </button>
-                </div>
+                {editingId === record.id ? (
+                  <>
+                    <input
+                      type="text"
+                      className="ui-input min-w-0 flex-1 px-3 py-1.5 text-sm"
+                      value={editingTitle}
+                      maxLength={100}
+                      autoFocus
+                      onChange={(e) => setEditingTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void renameHistoryRecord(record.id);
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                    />
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        type="button"
+                        className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                        disabled={historyBusyId === record.id}
+                        onClick={() => void renameHistoryRecord(record.id)}
+                      >
+                        {historyBusyId === record.id ? "저장 중…" : "저장"}
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        onClick={() => setEditingId(null)}
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-slate-900">
+                        {record.school
+                          ? `${record.school} · ${record.studentName}`
+                          : record.studentName}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {new Date(record.generatedAt).toLocaleString("ko-KR")}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        type="button"
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        disabled={historyBusyId === record.id}
+                        onClick={() => void openHistoryRecord(record.id)}
+                      >
+                        {historyBusyId === record.id ? "불러오는 중…" : "열람"}
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        disabled={historyBusyId === record.id}
+                        onClick={() => startEditingRecord(record)}
+                      >
+                        제목 수정
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                        disabled={historyBusyId === record.id}
+                        onClick={() => void deleteHistoryRecord(record.id)}
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  </>
+                )}
               </li>
             ))}
           </ul>
