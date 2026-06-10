@@ -19,16 +19,20 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       studentName?: string;
       text?: string;
+      analysisInstructions?: string;
     };
 
     const studentName = String(body.studentName ?? "").trim() || "학생";
     const text = String(body.text ?? "").trim();
+    const analysisInstructions = String(body.analysisInstructions ?? "").trim();
 
     if (!text) {
       return jsonError("분석할 학생부 내용이 없습니다.");
     }
 
-    const result = await generateStudentRecordReport(studentName, text);
+    const result = await generateStudentRecordReport(studentName, text, {
+      analysisInstructions,
+    });
     if (!result.ok) {
       return jsonError(result.message);
     }

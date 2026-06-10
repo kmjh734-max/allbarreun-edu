@@ -4,6 +4,7 @@ import {
   resolveImageMimeType,
 } from "@/lib/student-records/file-types";
 import {
+  STUDENT_RECORD_MAX_IMAGE_BYTES,
   STUDENT_RECORD_MAX_PDF_BYTES,
   STUDENT_RECORD_MAX_PDF_PAGES,
   STUDENT_RECORD_MAX_TOTAL_BYTES,
@@ -66,8 +67,10 @@ export async function parseStudentRecordUpload(
           `처리 가능한 이미지는 최대 ${STUDENT_RECORD_MAX_PDF_PAGES}장입니다.`
         );
       }
-      if (entry.size > 1 * 1024 * 1024) {
-        throw new Error("이미지 파일은 1MB 이하만 업로드할 수 있습니다.");
+      if (entry.size > STUDENT_RECORD_MAX_IMAGE_BYTES) {
+        throw new Error(
+          `이미지 파일은 ${Math.round(STUDENT_RECORD_MAX_IMAGE_BYTES / (1024 * 1024))}MB 이하만 업로드할 수 있습니다.`
+        );
       }
       const buffer = Buffer.from(await entry.arrayBuffer());
       const mime = resolveImageMimeType(entry);

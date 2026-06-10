@@ -9,7 +9,15 @@ import {
   isUnsupportedParameterError,
   isUnsupportedTemperatureError,
 } from "@/lib/student-records/model";
+import {
+  STUDENT_RECORD_SIMPLE_SYSTEM_PROMPT,
+} from "@/lib/student-records/simple-analysis-prompt";
 import { STUDENT_RECORD_ANALYSIS_SYSTEM_PROMPT } from "@/lib/student-records/system-prompt";
+
+export type GenerateStudentRecordOptions = {
+  /** 비어 있지 않으면 간단 분석 모드(성적 블록 생략) + 사용자 지침 우선 */
+  analysisInstructions?: string;
+};
 
 type RequestProfile = {
   includeTemperature: boolean;
@@ -47,7 +55,8 @@ function relaxProfile(
 
 export async function generateStudentRecordReport(
   studentName: string,
-  text: string
+  text: string,
+  options: GenerateStudentRecordOptions = {}
 ): Promise<{ ok: true; html: string } | { ok: false; message: string }> {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {
@@ -64,18 +73,23 @@ export async function generateStudentRecordReport(
     STUDENT_RECORD_ANALYSIS_TIMEOUT_MS
   );
 
+  const instructions = options.analysisInstructions?.trim() ?? "";
+  const useSimpleMode = instructions.length > 0;
+
   let reportSourceText = text.trim();
-  try {
-    const gradeBlock = await buildVerifiedGradeBlock(
-      apiKey,
-      reportSourceText,
-      controller.signal
-    );
-    if (gradeBlock) {
-      reportSourceText = `${reportSourceText}\n\n${gradeBlock}`;
+  if (!useSimpleMode) {
+    try {
+      const gradeBlock = await buildVerifiedGradeBlock(
+        apiKey,
+        reportSourceText,
+        controller.signal
+      );
+      if (gradeBlock) {
+        reportSourceText = `${reportSourceText}\n\n${gradeBlock}`;
+      }
+    } catch {
+      // 성적 블록 실패 시 OCR 원문만으로 보고서 생성
     }
-  } catch {
-    // 성적 블록 실패 시 OCR 원문만으로 보고서 생성
   }
 
   const nameHint =
@@ -83,26 +97,40 @@ export async function generateStudentRecordReport(
       ? "학생명이 지정되지 않았습니다. 자료에서 학생명·학교명·학년을 추출해 Hero 섹션에 반영하세요."
       : `분석 대상 학생: ${studentName}`;
 
-  const userText = [
-    nameHint,
-    "",
-    "아래는 학교생활기록부 원문 자료입니다. 시스템 지침(추가 규칙 A~K 포함)을 모두 준수하여 HTML만 출력하세요.",
-    "",
-    "【생성 전 필수 확인 — 규칙 J】",
-    "□ `=== 성적 산출 (코드 검증` 블록이 있으면 섹션2·Hero 성적 수치는 그 값을 그대로 사용 (재계산·수정 금지)",
-    "□ 석차등급×이수학점 가중평균, 1·2·전체 학기 계산표",
-    "□ 9등급 환산: 앵커 선형 보간, 단순 곱셈 금지, 「약」+ 면책 문구 + 골드 안내 박스",
-    "□ 대학: K 0.08~0.17 세부구간·8항목(상향/적정/안정/전형추천)·주의학과 +0.2~0.4조정",
-    "□ OCR 훼손·향후 명료화 권고 문구 절대 금지",
-    "□ 자가진단: 1~8번 모두 LV 점수(가중 LV 평균) 산정, 요약표+산정근거표+LV분석표, 총점 게이지",
-    "□ 성적(정량) vs 자가진단(정성) 분리, 교과전형 vs 학종 분리",
-    "□ <!DOCTYPE html> ~ </html> HTML만 출력",
-    "□ 섹션 6 HTML 디자인: Hero 그라데이션·카드·타임라인·2열·뱃지·게이지 등 프리미엄 UI 필수 (간소화 금지)",
-    "□ 섹션 1~18 전체 포함 (축약 금지)",
-    "",
-    "=== 학생부 원문 ===",
-    reportSourceText,
-  ].join("\n");
+  const userText = useSimpleMode
+    ? [
+        nameHint,
+        "",
+        "【분석 요청】",
+        instructions,
+        "",
+        "=== 학생부 원문 ===",
+        reportSourceText,
+      ].join("\n")
+    : [
+        nameHint,
+        "",
+        "아래는 학교생활기록부 원문 자료입니다. 시스템 지침(추가 규칙 A~K 포함)을 모두 준수하여 HTML만 출력하세요.",
+        "",
+        "【생성 전 필수 확인 — 규칙 J】",
+        "□ `=== 성적 산출 (코드 검증` 블록이 있으면 섹션2·Hero 성적 수치는 그 값을 그대로 사용 (재계산·수정 금지)",
+        "□ 석차등급×이수학점 가중평균, 1·2·전체 학기 계산표",
+        "□ 9등급 환산: 앵커 선형 보간, 단순 곱셈 금지, 「약」+ 면책 문구 + 골드 안내 박스",
+        "□ 대학: K 0.08~0.17 세부구간·8항목(상향/적정/안정/전형추천)·주의학과 +0.2~0.4조정",
+        "□ OCR 훼손·향후 명료화 권고 문구 절대 금지",
+        "□ 자가진단: 1~8번 모두 LV 점수(가중 LV 평균) 산정, 요약표+산정근거표+LV분석표, 총점 게이지",
+        "□ 성적(정량) vs 자가진단(정성) 분리, 교과전형 vs 학종 분리",
+        "□ <!DOCTYPE html> ~ </html> HTML만 출력",
+        "□ 섹션 6 HTML 디자인: Hero 그라데이션·카드·타임라인·2열·뱃지·게이지 등 프리미엄 UI 필수 (간소화 금지)",
+        "□ 섹션 1~18 전체 포함 (축약 금지)",
+        "",
+        "=== 학생부 원문 ===",
+        reportSourceText,
+      ].join("\n");
+
+  const systemPrompt = useSimpleMode
+    ? STUDENT_RECORD_SIMPLE_SYSTEM_PROMPT
+    : STUDENT_RECORD_ANALYSIS_SYSTEM_PROMPT;
 
   const models = getStudentRecordModelCandidates();
   let lastMessage = "학생부 분석 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.";
@@ -121,12 +149,7 @@ export async function generateStudentRecordReport(
           },
           signal: controller.signal,
           body: JSON.stringify(
-            buildStudentRecordChatBody(
-              model,
-              STUDENT_RECORD_ANALYSIS_SYSTEM_PROMPT,
-              userText,
-              profile
-            )
+            buildStudentRecordChatBody(model, systemPrompt, userText, profile)
           ),
         });
 

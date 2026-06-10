@@ -1,7 +1,7 @@
 /** Vercel 업로드 본문 한도를 고려 */
 export const STUDENT_RECORD_MAX_TOTAL_BYTES = 4_000_000;
 export const STUDENT_RECORD_MAX_PDF_BYTES = 4 * 1024 * 1024;
-export const STUDENT_RECORD_MAX_IMAGE_BYTES = 1 * 1024 * 1024;
+export const STUDENT_RECORD_MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 /** 직접 업로드하는 JPG/PNG */
 export const STUDENT_RECORD_MAX_DIRECT_IMAGES = 10;

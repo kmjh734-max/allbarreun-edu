@@ -19,6 +19,8 @@ import {
   validatePreparedStudentRecordFiles,
   validateStudentRecordFiles,
 } from "@/lib/student-records/client-upload";
+import { STUDENT_RECORD_MAX_IMAGE_BYTES } from "@/lib/student-records/limits";
+import { DEFAULT_ANALYSIS_INSTRUCTIONS } from "@/lib/student-records/simple-analysis-prompt";
 import { isPdfUpload } from "@/lib/student-records/file-types";
 import { STUDENT_RECORD_EXTRACT_CHUNK_PARALLEL } from "@/lib/student-records/limits";
 import {
@@ -56,6 +58,9 @@ export function StudentRecordWorkspace({
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [manualStudentName, setManualStudentName] = useState("");
   const [text, setText] = useState("");
+  const [analysisInstructions, setAnalysisInstructions] = useState(
+    DEFAULT_ANALYSIS_INSTRUCTIONS
+  );
   const [files, setFiles] = useState<File[]>([]);
   const [result, setResult] = useState<StudentRecordAnalysisResult | null>(null);
   const [listLoading, setListLoading] = useState(false);
@@ -263,6 +268,7 @@ export function StudentRecordWorkspace({
         body: JSON.stringify({
           studentName: resolvedStudentName,
           text: combinedExtractedText,
+          analysisInstructions: analysisInstructions.trim(),
         }),
       });
       const { data: generated, error: generateError } =
@@ -398,9 +404,11 @@ export function StudentRecordWorkspace({
         </h2>
         <p className="text-xs text-slate-500">
           성적표·세특·창체·행특 텍스트를 붙여넣거나, PDF·이미지(JPG/PNG)를
-          업로드하세요. 스캔 PDF는 고해상도 변환 후 OpenAI Vision(gpt-4o)으로
-          OCR합니다(최대 {STUDENT_RECORD_MAX_PDF_PAGES}페이지). 전체
-          용량은 약 {formatBytes(STUDENT_RECORD_MAX_TOTAL_BYTES)} 이하를 권장합니다.
+          업로드하세요. 이미지는 장당 최대{" "}
+          {formatBytes(STUDENT_RECORD_MAX_IMAGE_BYTES)}까지 허용합니다. 스캔 PDF는
+          고해상도 변환 후 OpenAI Vision(gpt-4o)으로 OCR합니다(최대{" "}
+          {STUDENT_RECORD_MAX_PDF_PAGES}페이지). 전체 용량은 약{" "}
+          {formatBytes(STUDENT_RECORD_MAX_TOTAL_BYTES)} 이하를 권장합니다.
         </p>
         <textarea
           className="ui-input min-h-[220px] font-mono text-xs leading-relaxed"
@@ -422,6 +430,23 @@ export function StudentRecordWorkspace({
             ))}
           </ul>
         )}
+      </section>
+
+      <section className="no-print space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="text-sm font-semibold text-slate-900">
+          3. 분석 요청 (선택)
+        </h2>
+        <p className="text-xs text-slate-500">
+          AI에게 어떻게 분석할지 적어 주세요. 기본값은 성적을 제외하고 기록
+          내용만 분석하도록 되어 있습니다. 비우면 상세 분석(성적·대학 추천
+          포함) 모드로 생성됩니다.
+        </p>
+        <textarea
+          className="ui-input min-h-[120px] text-sm leading-relaxed"
+          value={analysisInstructions}
+          onChange={(e) => setAnalysisInstructions(e.target.value)}
+          placeholder="예: 성적 분석 없이 세특·행특·창체만 요약해 주세요."
+        />
       </section>
 
       {error && (

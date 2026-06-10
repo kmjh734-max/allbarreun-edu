@@ -66,9 +66,14 @@ export async function POST(request: Request) {
       return jsonError(extracted.message);
     }
 
+    const analysisInstructions = String(
+      formData.get("analysisInstructions") ?? ""
+    ).trim();
+
     const generated = await generateStudentRecordReport(
       target.studentName,
-      extracted.text
+      extracted.text,
+      { analysisInstructions }
     );
 
     if (!generated.ok) {
