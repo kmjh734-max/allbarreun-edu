@@ -51,10 +51,10 @@ export function StudentRecordReportView({
         </div>
         <button
           type="button"
-          className="text-sm text-emerald-800 underline hover:text-emerald-950"
+          className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-sm font-medium text-emerald-800 hover:bg-emerald-100"
           onClick={onReset}
         >
-          새 분석
+          ← 학생부 분석 메인으로
         </button>
       </div>
 
@@ -71,6 +71,16 @@ export function StudentRecordReportView({
           className="min-h-[80vh] w-full border-0"
           sandbox="allow-same-origin"
         />
+      </div>
+
+      <div className="no-print">
+        <button
+          type="button"
+          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          onClick={onReset}
+        >
+          ← 학생부 분석 메인으로 돌아가기
+        </button>
       </div>
 
       <StudentRecordPrintPreview
