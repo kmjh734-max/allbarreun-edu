@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/auth/get-profile";
-import { extractStudentIdentityFromRecordText } from "@/lib/student-records/extract-identity";
+import {
+  extractStudentIdentityFromRecordText,
+  extractStudentNameFromReportHtml,
+} from "@/lib/student-records/extract-identity";
 import { generateStudentRecordReport } from "@/lib/student-records/generate-report";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -43,10 +46,14 @@ export async function POST(request: Request) {
 
     const generatedAt = new Date().toISOString();
 
-    // 학생 미선택(placeholder) 시 학생부 본문에서 성명·학교를 보충
+    // 학생 미선택(placeholder) 시 보고서 제목 → 학생부 본문 순으로 성명을 보충
     const identity = extractStudentIdentityFromRecordText(text);
     const effectiveStudentName =
-      studentName !== "학생" ? studentName : identity.name ?? studentName;
+      studentName !== "학생"
+        ? studentName
+        : extractStudentNameFromReportHtml(result.html) ??
+          identity.name ??
+          studentName;
     const school = identity.school;
 
     // 분석 기록 저장 — 실패해도 보고서 응답은 정상 반환

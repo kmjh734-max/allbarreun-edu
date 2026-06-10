@@ -45,6 +45,11 @@ const NAME_STOPWORDS = new Set([
   "모든",
   "본인",
   "우리",
+  "학생부",
+  "분석",
+  "종합",
+  "보고서",
+  "리포트",
 ]);
 
 function isPlausibleName(candidate: string): boolean {
@@ -68,6 +73,37 @@ function extractName(text: string): string | null {
     let match: RegExpExecArray | null;
     while ((match = re.exec(text))) {
       const candidate = match[1]?.trim();
+      if (candidate && isPlausibleName(candidate)) {
+        return candidate;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * 분석 모델이 생성한 보고서 HTML의 제목·헤더에서 학생 이름 추출.
+ * (예: "학생부종합전형 분석 리포트 - 하다울", "하다울 학생부종합전형 분석 리포트")
+ * 모델이 학생부 전체를 읽고 식별한 이름이라 정규식 추출보다 신뢰도가 높다.
+ */
+export function extractStudentNameFromReportHtml(html: string): string | null {
+  const sources = [
+    html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] ?? "",
+    html.match(/<h1[^>]*>([^<]*)<\/h1>/i)?.[1] ?? "",
+  ];
+
+  for (const source of sources) {
+    const trimmed = source.trim();
+    if (!trimmed) continue;
+
+    const candidates = [
+      // "… - 하다울" / "… – 하다울"
+      trimmed.match(/[-–—]\s*([가-힣]{2,4})\s*$/)?.[1],
+      // "하다울 학생부…" / "하다울 학생 …"
+      trimmed.match(/^([가-힣]{2,4})\s/)?.[1],
+    ];
+
+    for (const candidate of candidates) {
       if (candidate && isPlausibleName(candidate)) {
         return candidate;
       }
