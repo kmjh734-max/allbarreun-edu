@@ -3,8 +3,8 @@ export const STUDENT_RECORD_MAX_TOTAL_BYTES = 4_000_000;
 export const STUDENT_RECORD_MAX_PDF_BYTES = 4 * 1024 * 1024;
 export const STUDENT_RECORD_MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
-/** 직접 업로드하는 JPG/PNG */
-export const STUDENT_RECORD_MAX_DIRECT_IMAGES = 10;
+/** 직접 업로드하는 JPG/PNG (PDF 페이지 한도와 동일) */
+export const STUDENT_RECORD_MAX_DIRECT_IMAGES = 40;
 
 /** 스캔 PDF → Vision 변환 최대 페이지 */
 export const STUDENT_RECORD_MAX_PDF_PAGES = 40;
@@ -27,8 +27,8 @@ export const STUDENT_RECORD_PAGE_JPEG_TARGET_BYTES = 550_000;
 /** Vision OCR 동시 배치 수 */
 export const STUDENT_RECORD_VISION_CONCURRENCY = 3;
 
-/** 클라이언트 OCR 청크 병렬 요청 수 (1 = 요청당 부하·타임아웃 방지) */
-export const STUDENT_RECORD_EXTRACT_CHUNK_PARALLEL = 1;
+/** 클라이언트 OCR 청크 병렬 요청 수 — 청크마다 독립 서버리스 호출이므로 병렬 처리로 OCR 단계를 단축 */
+export const STUDENT_RECORD_EXTRACT_CHUNK_PARALLEL = 3;
 
 /** 이 수 초과 시 배치 전사 후 텍스트-only로 최종 보고서 생성 */
 export const STUDENT_RECORD_VISION_BATCH_THRESHOLD = 6;

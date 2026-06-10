@@ -40,6 +40,13 @@ type ExtractApiResult = {
   studentName?: string;
 };
 
+type HistoryRecord = {
+  id: string;
+  studentName: string;
+  generatedAt: string;
+  createdAt: string;
+};
+
 interface StudentRecordWorkspaceProps {
   initialClasses?: ReportClassOption[];
   initialStudents?: ReportStudentOption[];
@@ -66,6 +73,8 @@ export function StudentRecordWorkspace({
   const [progressLabel, setProgressLabel] = useState<string | null>(null);
   const [progressPercent, setProgressPercent] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<HistoryRecord[]>([]);
+  const [historyBusyId, setHistoryBusyId] = useState<string | null>(null);
 
   const updateProgress = useCallback((label: string, percent: number) => {
     setProgressLabel(label);
@@ -94,6 +103,64 @@ export function StudentRecordWorkspace({
       setListLoading(false);
     }
   }, [classId, nameQuery, loginQuery]);
+
+  const loadHistory = useCallback(async () => {
+    try {
+      const res = await fetch("/api/student-records/history");
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setHistory(data.records ?? []);
+      }
+    } catch {
+      // 기록 로딩 실패는 분석 기능에 영향 없음
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadHistory();
+  }, [loadHistory]);
+
+  async function openHistoryRecord(id: string) {
+    setHistoryBusyId(id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/student-records/history/${id}`);
+      const data = await res.json();
+      if (!res.ok || !data.ok || !data.record?.html) {
+        throw new Error(data.message ?? "기록을 불러오지 못했습니다.");
+      }
+      setResult({
+        studentId: data.record.studentId ?? null,
+        studentName: data.record.studentName ?? "학생",
+        html: data.record.html,
+        generatedAt: data.record.generatedAt,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "기록을 불러오지 못했습니다.");
+    } finally {
+      setHistoryBusyId(null);
+    }
+  }
+
+  async function deleteHistoryRecord(id: string) {
+    if (!window.confirm("이 분석 기록을 삭제할까요?")) return;
+    setHistoryBusyId(id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/student-records/history/${id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message ?? "기록 삭제에 실패했습니다.");
+      }
+      setHistory((prev) => prev.filter((r) => r.id !== id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "기록 삭제에 실패했습니다.");
+    } finally {
+      setHistoryBusyId(null);
+    }
+  }
 
   const hasInitialLists =
     initialClasses.length > 0 || initialStudents.length > 0;
@@ -253,6 +320,7 @@ export function StudentRecordWorkspace({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          studentId: resolvedStudentId,
           studentName: resolvedStudentName,
           text: combinedExtractedText,
           analysisInstructions: analysisInstructions.trim(),
@@ -281,6 +349,7 @@ export function StudentRecordWorkspace({
         html: generated.html,
         generatedAt: generated.generatedAt,
       });
+      void loadHistory();
     } catch (e) {
       setError(e instanceof Error ? e.message : "오류가 발생했습니다.");
     } finally {
@@ -459,6 +528,51 @@ export function StudentRecordWorkspace({
           </div>
         )}
       </div>
+
+      <section className="no-print space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="text-sm font-semibold text-slate-900">분석 기록</h2>
+        {history.length === 0 ? (
+          <p className="text-xs text-slate-500">
+            저장된 분석 기록이 없습니다. 보고서를 생성하면 자동으로 저장됩니다.
+          </p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {history.map((record) => (
+              <li
+                key={record.id}
+                className="flex flex-wrap items-center justify-between gap-2 py-2.5"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-slate-900">
+                    {record.studentName}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {new Date(record.generatedAt).toLocaleString("ko-KR")}
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    disabled={historyBusyId === record.id}
+                    onClick={() => void openHistoryRecord(record.id)}
+                  >
+                    {historyBusyId === record.id ? "불러오는 중…" : "열람"}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                    disabled={historyBusyId === record.id}
+                    onClick={() => void deleteHistoryRecord(record.id)}
+                  >
+                    삭제
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }
