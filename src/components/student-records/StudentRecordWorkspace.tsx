@@ -138,6 +138,7 @@ export function StudentRecordWorkspace({
         studentName: data.record.studentName ?? "학생",
         html: data.record.html,
         generatedAt: data.record.generatedAt,
+        recordId: data.record.id ?? id,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "기록을 불러오지 못했습니다.");
@@ -411,6 +412,7 @@ export function StudentRecordWorkspace({
           html?: string;
           studentName?: string;
           generatedAt?: string;
+          recordId?: string | null;
         }>(generateRes);
 
       if (generateError) {
@@ -427,6 +429,7 @@ export function StudentRecordWorkspace({
         studentName: generated.studentName ?? resolvedStudentName,
         html: generated.html,
         generatedAt: generated.generatedAt,
+        recordId: generated.recordId ?? null,
       });
       void loadHistory();
     } catch (e) {
@@ -446,6 +449,9 @@ export function StudentRecordWorkspace({
           setResult(null);
           setError(null);
         }}
+        onHtmlSaved={(html) =>
+          setResult((prev) => (prev ? { ...prev, html } : prev))
+        }
       />
     );
   }

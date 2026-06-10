@@ -58,14 +58,14 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 }
 
-/** 분석 기록 제목 수정 */
+/** 분석 기록 수정 — 제목(title) 또는 보고서 본문(html) */
 export async function PATCH(request: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
     const result = await loadAccessibleRecord(id);
     if (result.error) return result.error;
 
-    let body: { title?: string };
+    let body: { title?: string; html?: string };
     try {
       body = await request.json();
     } catch {
@@ -75,29 +75,53 @@ export async function PATCH(request: Request, context: RouteContext) {
       );
     }
 
-    const title = body.title?.trim();
-    if (!title || title.length > 100) {
+    const update: Record<string, unknown> = {};
+
+    if (body.title !== undefined) {
+      const title = body.title.trim();
+      if (!title || title.length > 100) {
+        return NextResponse.json(
+          { ok: false, message: "제목은 1~100자로 입력해 주세요." },
+          { status: 400 }
+        );
+      }
+      // 사용자가 입력한 제목을 그대로 표시하도록 school은 비운다
+      update.student_name = title;
+      update.school = null;
+    }
+
+    if (body.html !== undefined) {
+      const html = body.html.trim();
+      if (!html || !html.includes("<") || html.length > 2_000_000) {
+        return NextResponse.json(
+          { ok: false, message: "보고서 내용이 올바르지 않습니다." },
+          { status: 400 }
+        );
+      }
+      update.html = html;
+    }
+
+    if (Object.keys(update).length === 0) {
       return NextResponse.json(
-        { ok: false, message: "제목은 1~100자로 입력해 주세요." },
+        { ok: false, message: "수정할 내용이 없습니다." },
         { status: 400 }
       );
     }
 
-    // 사용자가 입력한 제목을 그대로 표시하도록 school은 비운다
     const { error } = await result.admin
       .from("student_record_analyses")
-      .update({ student_name: title, school: null })
+      .update(update)
       .eq("id", id);
 
     if (error) {
       console.error("[student-records/history/:id] update failed:", error.message);
       return NextResponse.json(
-        { ok: false, message: "제목 수정에 실패했습니다." },
+        { ok: false, message: "수정에 실패했습니다." },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ ok: true, title });
+    return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("[student-records/history/:id] PATCH error:", e);
     return NextResponse.json(

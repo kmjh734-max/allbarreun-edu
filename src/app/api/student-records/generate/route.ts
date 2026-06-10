@@ -57,6 +57,7 @@ export async function POST(request: Request) {
     const school = identity.school;
 
     // 분석 기록 저장 — 실패해도 보고서 응답은 정상 반환
+    let recordId: string | null = null;
     try {
       const admin = createAdminClient();
       const row = {
@@ -66,9 +67,12 @@ export async function POST(request: Request) {
         generated_at: generatedAt,
         created_by: profile.id,
       };
-      const { error } = await admin
+      const { data, error } = await admin
         .from("student_record_analyses")
-        .insert({ ...row, school });
+        .insert({ ...row, school })
+        .select("id")
+        .single();
+      recordId = (data?.id as string | undefined) ?? null;
       if (error) {
         console.error(
           "[student-records/generate] history insert failed:",
@@ -76,7 +80,12 @@ export async function POST(request: Request) {
         );
         // school 컬럼 미적용(마이그레이션 전) 환경에서도 기록은 남긴다
         if (/school/i.test(error.message)) {
-          await admin.from("student_record_analyses").insert(row);
+          const { data: retry } = await admin
+            .from("student_record_analyses")
+            .insert(row)
+            .select("id")
+            .single();
+          recordId = (retry?.id as string | undefined) ?? null;
         }
       }
     } catch (e) {
@@ -89,6 +98,7 @@ export async function POST(request: Request) {
       studentName: effectiveStudentName,
       school,
       generatedAt,
+      recordId,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "보고서 생성 오류";
