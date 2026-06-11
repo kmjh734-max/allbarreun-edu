@@ -1,6 +1,6 @@
-import { ACADEMY_NAME, SITE_URL } from "@/lib/branding";
+import { ACADEMY_NAME, LOGO_SRC, SITE_URL } from "@/lib/branding";
 
-const LOGO_URL = new URL("/image/logo.png", SITE_URL).toString();
+const LOGO_URL = new URL(LOGO_SRC, SITE_URL).toString();
 
 /**
  * AI가 생성한 보고서 HTML에 학원 로고·학원명 머리말과 꼬리말을 삽입.
