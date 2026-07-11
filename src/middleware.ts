@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isVocabEnabled, isVocabPath } from "@/lib/academy-features";
 import { updateSession } from "@/lib/supabase/middleware";
 import {
   getDashboardPathForRole,
@@ -10,6 +11,8 @@ const PUBLIC_PREFIXES = [
   "/login",
   "/auth/callback",
   "/student-record/share",
+  "/exam-vocab",
+  "/api/exam-vocab",
 ];
 
 function isPublicPath(pathname: string): boolean {
@@ -29,8 +32,25 @@ function isPublicPath(pathname: string): boolean {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // 학생 QR 경로 → 공개 학습 (로그인 전 리다이렉트)
+  if (pathname.startsWith("/student/vocab/exam/")) {
+    const setId = pathname.replace("/student/vocab/exam/", "").split("/")[0];
+    if (setId) {
+      const url = request.nextUrl.clone();
+      url.pathname = `/exam-vocab/${setId}`;
+      return NextResponse.redirect(url);
+    }
+  }
+
   if (isPublicPath(pathname)) {
     return NextResponse.next();
+  }
+
+  if (!isVocabEnabled() && pathname.startsWith("/api/vocab")) {
+    return NextResponse.json(
+      { ok: false, message: "이 학원에서는 단어학습을 사용하지 않습니다." },
+      { status: 404 }
+    );
   }
 
   const { supabase, user, supabaseResponse } = await updateSession(request);
@@ -57,6 +77,13 @@ export async function middleware(request: NextRequest) {
   }
 
   const dashboardPath = getDashboardPathForRole(role);
+
+  if (!isVocabEnabled() && isVocabPath(pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = dashboardPath;
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
 
   if (pathname === "/login") {
     const url = request.nextUrl.clone();

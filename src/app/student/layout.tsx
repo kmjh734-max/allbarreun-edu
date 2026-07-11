@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { filterNavItems } from "@/lib/academy-features";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/get-profile";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -6,6 +7,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 const NAV_ITEMS = [
   { href: "/student", label: "내 강의실" },
   { href: "/student/courses", label: "수강 강좌" },
+  { href: "/student/vocab", label: "단어학습" },
 ];
 
 export default async function StudentLayout({
@@ -26,7 +28,7 @@ export default async function StudentLayout({
   }
 
   return (
-    <DashboardLayout profile={profile} navItems={NAV_ITEMS}>
+    <DashboardLayout profile={profile} navItems={filterNavItems(NAV_ITEMS)}>
       {children}
     </DashboardLayout>
   );

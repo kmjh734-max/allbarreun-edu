@@ -7,6 +7,7 @@ import { deleteClass } from "@/app/admin/classes/actions";
 interface DeleteClassButtonProps {
   classId: string;
   className: string;
+  onDelete?: (classId: string) => Promise<{ ok: boolean; message: string }>;
   /** 삭제 후 이동할 경로 (기본: 반 목록) */
   redirectTo?: string;
   /** 목록용 compact 스타일 */
@@ -16,6 +17,7 @@ interface DeleteClassButtonProps {
 export function DeleteClassButton({
   classId,
   className,
+  onDelete = deleteClass,
   redirectTo = "/admin/classes",
   compact = false,
 }: DeleteClassButtonProps) {
@@ -25,14 +27,14 @@ export function DeleteClassButton({
   async function handleDelete() {
     if (
       !window.confirm(
-        `「${className}」 반을 완전히 삭제할까요?\n반 학생·강좌 배정 정보도 함께 삭제됩니다. 학생 계정과 수강 등록은 유지됩니다.`
+        `「${className}」 반을 삭제하시겠습니까?\n반에 속한 학생·강좌 배정 정보가 정리될 수 있습니다. 학생 계정은 유지됩니다.`
       )
     ) {
       return;
     }
 
     setLoading(true);
-    const result = await deleteClass(classId);
+    const result = await onDelete(classId);
     setLoading(false);
 
     if (!result.ok) {

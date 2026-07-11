@@ -1,6 +1,8 @@
 /**
  * 학원별 브랜드·인증 설정 — 새 학원 복제 시 이 파일만 수정하세요.
  */
+export const ACADEMY_ID = "allbarreun" as const;
+
 export const academyConfig = {
   academyName: "올바른교육",
   lmsTitle: "올바른교육 LMS",

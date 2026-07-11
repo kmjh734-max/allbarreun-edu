@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { filterNavItems } from "@/lib/academy-features";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/get-profile";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -6,6 +7,8 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 const NAV_ITEMS = [
   { href: "/teacher", label: "강사 홈" },
   { href: "/teacher/courses", label: "강좌 관리" },
+  { href: "/teacher/vocab", label: "단어학습" },
+  { href: "/teacher/question-generator", label: "변형문제" },
   { href: "/teacher/classes", label: "반 관리" },
   { href: "/teacher/students", label: "학생 관리" },
   { href: "/teacher/progress", label: "수강 현황" },
@@ -30,7 +33,7 @@ export default async function TeacherLayout({
   }
 
   return (
-    <DashboardLayout profile={profile} navItems={NAV_ITEMS}>
+    <DashboardLayout profile={profile} navItems={filterNavItems(NAV_ITEMS)}>
       {children}
     </DashboardLayout>
   );

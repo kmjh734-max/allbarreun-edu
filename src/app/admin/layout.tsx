@@ -1,10 +1,13 @@
 import { redirect } from "next/navigation";
+import { filterNavItems } from "@/lib/academy-features";
 import { getCurrentProfile } from "@/lib/auth/get-profile";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 
 const NAV_ITEMS = [
   { href: "/admin", label: "관리 홈" },
   { href: "/admin/courses", label: "강좌 관리" },
+  { href: "/admin/vocab", label: "단어학습" },
+  { href: "/admin/question-generator", label: "변형문제" },
   { href: "/admin/classes", label: "반 관리" },
   { href: "/admin/students", label: "학생·수강" },
   { href: "/admin/progress", label: "수강 현황" },
@@ -25,7 +28,7 @@ export default async function AdminLayout({
   }
 
   return (
-    <DashboardLayout profile={profile} navItems={NAV_ITEMS}>
+    <DashboardLayout profile={profile} navItems={filterNavItems(NAV_ITEMS)}>
       {children}
     </DashboardLayout>
   );

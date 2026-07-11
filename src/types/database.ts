@@ -104,3 +104,159 @@ export interface CourseProgress {
   completedLessons: number;
   progressPercent: number;
 }
+
+export type VocabProgressStatus = "unknown" | "known" | "review";
+
+export type VocabTestType =
+  | "meaning_choice"
+  | "word_choice"
+  | "spelling"
+  | "final_exam";
+
+export type VocabQuestionType = VocabTestType | "meaning_ai";
+
+export interface VocabFolder {
+  id: string;
+  name: string;
+  teacher_id: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface VocabSet {
+  id: string;
+  title: string;
+  description: string | null;
+  folder_id: string | null;
+  order_index: number;
+  teacher_id: string | null;
+  created_by: string | null;
+  is_published: boolean;
+  exam_compact?: boolean;
+  source_job_id?: string | null;
+  created_at: string;
+  teacher?: Profile | null;
+  folder?: VocabFolder | null;
+}
+
+export interface VocabItem {
+  id: string;
+  set_id: string;
+  word: string;
+  meaning: string;
+  part_of_speech: string | null;
+  example_sentence: string | null;
+  example_meaning: string | null;
+  synonyms: string | null;
+  antonyms: string | null;
+  order_index: number;
+  created_at: string;
+}
+
+export interface VocabAssignment {
+  id: string;
+  set_id: string;
+  student_id: string | null;
+  class_id: string | null;
+  assigned_by: string | null;
+  created_at: string;
+  student?: Profile | null;
+  class?: Class | null;
+}
+
+export interface VocabProgress {
+  id: string;
+  student_id: string;
+  item_id: string;
+  status: VocabProgressStatus;
+  studied_count: number;
+  last_studied_at: string | null;
+  created_at: string;
+}
+
+export interface VocabTestAttempt {
+  id: string;
+  set_id: string;
+  student_id: string;
+  test_type: VocabTestType;
+  score: number;
+  total_questions: number;
+  correct_count: number;
+  started_at: string;
+  submitted_at: string | null;
+  created_at: string;
+}
+
+export interface VocabTestAnswer {
+  id: string;
+  attempt_id: string;
+  item_id: string;
+  question_type: VocabQuestionType;
+  question_text: string | null;
+  correct_answer: string | null;
+  student_answer: string | null;
+  is_correct: boolean;
+  choices: string[] | null;
+  created_at: string;
+}
+
+export interface VocabStageProgress {
+  id: string;
+  student_id: string;
+  set_id: string;
+  stage1_completed: boolean;
+  stage1_completed_at: string | null;
+  stage1_seen_item_ids: string[];
+  stage2_completed: boolean;
+  stage2_completed_at: string | null;
+  stage3_completed: boolean;
+  stage3_completed_at: string | null;
+  stage3_passed: boolean;
+  stage3_best_score: number;
+  stage3_last_score: number;
+  stage3_attempt_count: number;
+  stage3_passed_at: string | null;
+  stage4_passed: boolean;
+  stage4_best_score: number;
+  stage4_last_score: number;
+  stage4_attempt_count: number;
+  stage4_passed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VocabFinalTestAttempt {
+  id: string;
+  student_id: string;
+  set_id: string;
+  score: number;
+  total_questions: number;
+  correct_count: number;
+  passed: boolean;
+  submitted_at: string;
+  created_at: string;
+}
+
+export interface VocabFinalTestAnswer {
+  id: string;
+  attempt_id: string;
+  item_id: string;
+  question_type: "meaning" | "spelling";
+  question_text: string | null;
+  correct_answer: string | null;
+  student_answer: string | null;
+  is_correct: boolean;
+  ai_feedback: string | null;
+  created_at: string;
+}
+
+export interface StudentVocabSetSummary {
+  set: VocabSet;
+  itemCount: number;
+  stage1Completed: boolean;
+  stage2Completed: boolean;
+  stage3Completed: boolean;
+  stage4Passed: boolean;
+  stage4LastScore: number;
+  stage4BestScore: number;
+}

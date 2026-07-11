@@ -11,6 +11,11 @@ import {
   removeStudentFromClass,
   type ClassActionResult,
 } from "@/lib/classes/class-assignments";
+import {
+  assignVocabSetToStudent,
+  removeVocabAssignment,
+} from "@/lib/vocab/class-assignments";
+import { revalidateVocabPaths } from "@/lib/vocab/revalidate";
 
 async function requireAdmin(): Promise<
   | { ok: true; profileId: string }
@@ -195,4 +200,49 @@ export async function adminRemoveCourseFromClass(
 
   if (result.ok) revalidateClassPaths(classId);
   return result;
+}
+
+export async function adminAssignVocabSetToStudent(
+  classId: string,
+  studentId: string,
+  setId: string
+): Promise<ClassActionResult> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return { ok: false, message: auth.message };
+
+  const supabase = await createClient();
+  const result = await assignVocabSetToStudent(
+    supabase,
+    setId,
+    studentId,
+    classId,
+    auth.profileId
+  );
+
+  if (result.ok) {
+    revalidateClassPaths(classId);
+    revalidateVocabPaths("admin", { classId });
+  }
+  return result.ok
+    ? { ok: true, message: "학생에게 단어장이 배정되었습니다." }
+    : { ok: false, message: result.message };
+}
+
+export async function adminRemoveVocabSetFromStudent(
+  classId: string,
+  assignmentId: string
+): Promise<ClassActionResult> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return { ok: false, message: auth.message };
+
+  const supabase = await createClient();
+  const result = await removeVocabAssignment(supabase, assignmentId);
+
+  if (result.ok) {
+    revalidateClassPaths(classId);
+    revalidateVocabPaths("admin", { classId });
+  }
+  return result.ok
+    ? { ok: true, message: "단어장 배정이 해제되었습니다." }
+    : { ok: false, message: result.message };
 }
