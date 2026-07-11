@@ -37,8 +37,9 @@ async function main() {
         .replace("https://", "")
         .replace(".supabase.co", "");
     const region = env.SUPABASE_POOLER_REGION || "ap-northeast-2";
+    const aws = env.SUPABASE_POOLER_AWS || "aws-1";
     const password = encodeURIComponent(env.SUPABASE_DB_PASSWORD);
-    connectionString = `postgresql://postgres.${ref}:${password}@aws-0-${region}.pooler.supabase.com:6543/postgres`;
+    connectionString = `postgresql://postgres.${ref}:${password}@${aws}-${region}.pooler.supabase.com:6543/postgres`;
   }
   if (!connectionString) {
     console.error(
