@@ -418,7 +418,7 @@ function AnswerBlock({
       <p className="qg-print-answer-body">{q.explanation}</p>
       {hardWords.length > 0 ? (
         <div className="qg-print-hard-words">
-          <p className="qg-print-hard-words-label">보기 단어 (중3·≈1000L+)</p>
+          <p className="qg-print-hard-words-label">보기 단어</p>
           <ul className="qg-print-hard-words-list">
             {hardWords.map((w) => (
               <li key={`${w.word}-${w.meaning}`}>
