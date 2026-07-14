@@ -25,7 +25,7 @@ export const SYSTEM_PRESETS: Array<{
     description:
       "고1 학력평가 수준 · 어법·연결어·목적·불일치·무관·빈칸",
     config: withCounts([
-      ["grammar:na:default:어법모두고르기", 1],
+      ["grammar:na:default:어법추론", 1],
       ["sentence_blank:en:default:연결어빈칸", 1],
       ["underlined_inference:en:default:목적추론", 1],
       ["content_false:en:high:내용불일치", 1],
@@ -70,9 +70,9 @@ export const SYSTEM_PRESETS: Array<{
   {
     slug: "grammar_vocab_focus",
     name: "어법·어휘 집중",
-    description: "어법 모두/개수 · 어휘 고르기/개수",
+    description: "어법 추론/개수 · 어휘 고르기/개수",
     config: withCounts([
-      ["grammar:na:default:어법모두고르기", 1],
+      ["grammar:na:default:어법추론", 1],
       ["grammar:na:default:어법개수", 1],
       ["vocabulary:na:default:어휘추론", 1],
       ["vocabulary:na:default:어휘개수", 1],
@@ -84,7 +84,7 @@ export const SYSTEM_PRESETS: Array<{
     description:
       "학력평가 상위권 · 목적·불일치·어법·어휘·빈칸·순서·삽입·주제·함축·제시어배열",
     config: withCounts([
-      ["grammar:na:default:어법모두고르기", 1],
+      ["grammar:na:default:어법추론", 1],
       ["grammar:na:default:어법개수", 1],
       ["vocabulary:na:default:어휘추론", 1],
       ["vocabulary:na:default:어휘개수", 1],

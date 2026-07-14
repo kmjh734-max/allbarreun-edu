@@ -57,13 +57,13 @@ export const QUESTION_TYPE_GROUPS: QuestionTypeGroup[] = [
       opt(
         "grammar",
         "grammar_vocabulary",
-        "밑줄 모두 고르기",
+        "어법 추론",
         "default",
         null,
         true,
-        "ⓐ~ⓔ 중 어법상 어색한 것을 모두 고르기 (조합 선택)",
-        "어법모두고르기",
-        "다음 글의 밑줄 친 ⓐ~ⓔ 중, 어법상 어색한 것을 모두 고르면?"
+        "ⓐ~ⓔ 중 어법상 틀린 것 하나 고르기",
+        "어법추론",
+        "다음 글의 밑줄 친 부분 중, 어법상 틀린 것은?"
       ),
       opt(
         "grammar",
@@ -676,6 +676,16 @@ export function sanitizeCounts(
       migrated[oldHamchuk] ?? 0
     );
     delete migrated[oldHamchuk];
+  }
+  // 어법 모두 고르기 → 어법 추론 (틀린 어법 하나)
+  const oldEobeopAll = "grammar:na:default:어법모두고르기";
+  const newEobeopInfer = "grammar:na:default:어법추론";
+  if ((migrated[oldEobeopAll] ?? 0) > 0) {
+    migrated[newEobeopInfer] = Math.max(
+      migrated[newEobeopInfer] ?? 0,
+      migrated[oldEobeopAll] ?? 0
+    );
+    delete migrated[oldEobeopAll];
   }
   for (const [k, v] of Object.entries(migrated)) {
     // 구형 객관식 요약문완성만 차단 (서술형 요약문 빈칸은 허용)

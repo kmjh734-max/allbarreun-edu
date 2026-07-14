@@ -750,7 +750,7 @@ export type GrammarFocusPick = {
 
 /**
  * 문항마다 다른 유닛·CASE·형태 쌍을 강제.
- * wrongCount: 어법모두고르기 2~3, 어법개수 1~5
+ * wrongCount: 어법추론 1, 어법개수 1~5
  */
 export function pickGrammarFocus(wrongCount: number): GrammarFocusPick {
   const n = Math.max(1, Math.min(wrongCount, 5));

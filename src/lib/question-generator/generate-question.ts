@@ -29,6 +29,7 @@ import { MIN_SENTENCES_FOR_INSERTION_IRRELEVANT } from "@/lib/question-generator
 import {
   questionNeedsVocabGloss,
   normalizeHardWordsFromRaw,
+  resolveSchoolBand,
 } from "@/lib/question-generator/exam-vocab";
 import type { QuestionTypeOption } from "@/lib/question-generator/types";
 import type {
@@ -258,18 +259,17 @@ LANGUAGE: passageModified MUST be ENGLISH only.`;
     case "grammar": {
       const catalog = grammarCatalogPromptBlock();
       const explainRules = grammarExplanationRules();
-      if (code === "어법모두고르기") {
-        const wrongN = Math.random() < 0.5 ? 2 : 3;
-        const { focusBlock } = pickGrammarFocus(wrongN);
-        return `어법 모두 고르기 — 교재 단원별 문법 다양 출제:
+      if (code === "어법추론" || code === "어법모두고르기") {
+        const { focusBlock } = pickGrammarFocus(1);
+        return `어법 추론 — 틀린 어법 하나 고르기 (어휘 추론과 동일 형식):
 ${focusBlock}
 
 형식:
 - passageModified = 영어 지문, 밑줄 정확히 5개 ⓐⓑⓒⓓⓔ → ⓐ<u>대상</u>
-- 틀린 곳 정확히 ${wrongN}개 — 위 ‘이번 문항’ 문법을 서로 다른 단원으로 하나씩
-- 나머지 밑줄은 맞게 (함정처럼 보이되 옳음)
-- choices: 한글 조합 보기 5개, 정답 하나만 틀린 기호를 빠짐없이
-- correctAnswer 1-5. questionText 빈칸
+- 어법상 틀린 곳 정확히 1개 — 위 ‘이번 문항’ 문법 반영
+- 나머지 4개 밑줄은 어법상 맞음 (함정처럼 보이되 옳음)
+- choices: omit or empty array — 기호 IN the passage are the options; do NOT invent bottom combination choices
+- correctAnswer 1-5 mapping ⓐ=1 … ⓔ=5 (= 틀린 밑줄 번호). questionText 빈칸
 ${explainRules}
 ${grammarChoiceCraftNote()}
 LANGUAGE: 지문은 영어만.
@@ -641,7 +641,8 @@ function normalizePayload(
   raw: Record<string, unknown>,
   option: QuestionTypeOption,
   passage: string,
-  forcedInstruction: string
+  forcedInstruction: string,
+  grade: string
 ): GeneratedQuestionPayload {
   let choices = Array.isArray(raw.choices)
     ? raw.choices
@@ -655,12 +656,15 @@ function normalizePayload(
         .filter((c) => c.text.trim())
     : undefined;
 
-  // 일치개수·문장삽입·무관·어휘고르기: 하단 선택지 없음 (본문 표지가 보기)
+  // 일치개수·문장삽입·무관·어휘/어법 추론: 하단 선택지 없음 (본문 표지가 보기)
   if (
     option.type === "content_count" ||
     option.type === "sentence_insertion" ||
     option.type === "irrelevant_sentence" ||
-    (option.type === "vocabulary" && option.aingkaCode === "어휘추론")
+    (option.type === "vocabulary" && option.aingkaCode === "어휘추론") ||
+    (option.type === "grammar" &&
+      (option.aingkaCode === "어법추론" ||
+        option.aingkaCode === "어법모두고르기"))
   ) {
     choices = undefined;
   }
@@ -723,7 +727,8 @@ function normalizePayload(
     (option.type === "underlined_inference" &&
       option.aingkaCode === "함축의미추론") ||
     (option.type === "grammar" &&
-      (option.aingkaCode === "어법모두고르기" ||
+      (option.aingkaCode === "어법추론" ||
+        option.aingkaCode === "어법모두고르기" ||
         option.aingkaCode === "어법개수")) ||
     (option.type === "vocabulary" &&
       (option.aingkaCode === "어휘추론" || option.aingkaCode === "어휘개수")) ||
@@ -819,7 +824,10 @@ function normalizePayload(
       questionText: String(raw.questionText ?? ""),
       choiceLanguage: option.choiceLanguage,
     })
-      ? normalizeHardWordsFromRaw(raw.hardWords)
+      ? normalizeHardWordsFromRaw(
+          raw.hardWords,
+          resolveSchoolBand(grade)
+        )
       : [],
     evidence: [],
     scoringGuide:
@@ -1085,18 +1093,31 @@ export function assertBasicQuestionShape(
   }
 
   if (option.type === "grammar" && option.isObjective) {
-    if (!q.choices || q.choices.length < 5) {
-      return "객관식 선택지가 5개 미만입니다.";
-    }
     const mod = q.passageModified || "";
+    const isGrammarInference =
+      option.aingkaCode === "어법추론" ||
+      option.aingkaCode === "어법모두고르기";
+
     if (option.aingkaCode === "어법개수") {
+      if (!q.choices || q.choices.length < 5) {
+        return "객관식 선택지가 5개 미만입니다.";
+      }
       if (!/[ⓐⓑⓒⓓⓔⓕ]/.test(mod) || !/<u>[\s\S]*?<\/u>/i.test(mod)) {
         return "어법 개수 문항은 ⓐ~ⓕ 밑줄 표지가 필요합니다.";
       }
-    } else if (option.aingkaCode === "어법모두고르기") {
+    } else if (isGrammarInference) {
+      // 어법 추론: 하단 조합 보기 없음 — 본문 ⓐ~ⓔ가 보기
+      q.choices = undefined;
       if (!/[ⓐⓑⓒⓓⓔ]/.test(mod) || !/<u>[\s\S]*?<\/u>/i.test(mod)) {
-        return "어법 모두 고르기 문항은 ⓐ~ⓔ 밑줄 표지가 필요합니다.";
+        return "어법 추론 문항은 ⓐ~ⓔ 밑줄 표지가 필요합니다.";
       }
+      const ans = parseChoiceAnswer(q.correctAnswer);
+      if (ans == null) {
+        return "어법 추론 정답은 1~5여야 합니다.";
+      }
+      q.correctAnswer = ans;
+    } else if (!q.choices || q.choices.length < 5) {
+      return "객관식 선택지가 5개 미만입니다.";
     }
     if (hasHangul(mod)) {
       return "본문은 영어여야 합니다 (한글 포함됨).";
@@ -1327,7 +1348,7 @@ export async function generateOneQuestion(opts: {
           : "1-2 Korean sentences."
     }
 - For MCQ: correctAnswer is 1-5. Prefer varied positions (not always 1).
-- hardWords: When (a) English MCQ choices or (b) 일치개수 English <보기> (or Korean <보기>→passage): include 4~6 {word, meaning}. Target grade ≈ ${opts.grade || "고1"} (중3~고1): pick words Korean students at this level often miss — including short but non-basic lemmas (swap, skim, grasp, yield, burden, voucher, reluctant, scrutinize, comparable, misprint, conscious). Prefer the hardest real lemmas that appear in THIS item's English wording. Single dictionary token only (never phrases like "national monies"). Skip ultra-basics (consumer/people/important/money/make/need/progress/information/viewer/financial/national) and fake plurals (monies/datas). meaning = short Korean gloss. Rotate lemmas across same-passage slots. If none fit → []. For Korean-only MCQ / count-only / subjective without English 보기 → [].
+- hardWords: When (a) English MCQ choices or (b) 일치개수 English <보기> (or Korean <보기>→passage): include 4~6 {word, meaning}. School band = ${resolveSchoolBand(opts.grade)} (grade ${opts.grade || "고1"}). Prefer the HARDER lemmas that actually appear in THIS item's English — never pad with easy fillers (people/important/money/make/need/progress/information/viewer/financial/national/develop/compare/consumer). Include short non-basic lemmas when apt (swap, skim, grasp, yield, burden, voucher, reluctant, scrutinize, comparable, misprint, conscious). Single dictionary token only (never phrases like "national monies"). Fake plurals (monies/datas) forbidden. meaning = short Korean gloss. Rotate lemmas across same-passage slots. If none fit → []. For Korean-only MCQ / count-only / subjective without English 보기 → [].
 ${englishOnlyHint}
 ${
   allowSkip
@@ -1349,6 +1370,11 @@ ${
 ${
   option.aingkaCode === "어휘추론"
     ? "- Do NOT return bottom choices for 어휘 고르기; ①~⑤ in the passage are enough. correctAnswer is the wrong number."
+    : ""
+}
+${
+  option.aingkaCode === "어법추론" || option.aingkaCode === "어법모두고르기"
+    ? "- Do NOT return bottom choices for 어법 추론; ⓐ~ⓔ in the passage are enough. correctAnswer is the ONE wrong underline (1-5)."
     : ""
 }
 ${
@@ -1456,7 +1482,13 @@ ${typeRules(option)}`,
     );
   }
 
-  const payload = normalizePayload(raw, option, passage, forcedInstruction);
+  const payload = normalizePayload(
+    raw,
+    option,
+    passage,
+    forcedInstruction,
+    opts.grade || "고1"
+  );
   const shapeError = assertBasicQuestionShape(payload, option);
   if (shapeError) throw new Error(shapeError);
   return payload;

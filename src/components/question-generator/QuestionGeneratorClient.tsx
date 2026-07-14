@@ -1067,8 +1067,8 @@ export function QuestionGeneratorClient({
                       {(
                         [
                           {
-                            key: "grammar:na:default:어법모두고르기",
-                            label: "어법 모두",
+                            key: "grammar:na:default:어법추론",
+                            label: "어법 추론",
                           },
                           {
                             key: "grammar:na:default:어법개수",
@@ -1121,7 +1121,7 @@ export function QuestionGeneratorClient({
                         className="mt-1 w-full text-xs"
                         onClick={() =>
                           addCounts([
-                            ["grammar:na:default:어법모두고르기", 1],
+                            ["grammar:na:default:어법추론", 1],
                             ["grammar:na:default:어법개수", 1],
                             ["vocabulary:na:default:어휘추론", 1],
                             ["vocabulary:na:default:어휘개수", 1],
